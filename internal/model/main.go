@@ -37,3 +37,26 @@ type Status struct {
 	Available bool   `json:"available"`
 	VMID      int    `json:"vm_id"`
 }
+
+type VM struct {
+	ID         int    `json:"vmid"`
+	Name       string `json:"name"`
+	OS         string `json:"os"`
+	Running    bool   `json:"running"`
+	Node       string `json:"node"`
+	CPU        int    `json:"cpu"`
+	Disk       int    `json:"disk"`
+	Memory     int    `json:"memory"`
+	MemoryUsed int    `json:"memory_used"`
+}
+
+type Node struct {
+	Node       string  `json:"node"`
+	MaxCPU     float64 `json:"max_cpu"`
+	MaxMemory  float64 `json:"max_memory"`
+	CPU        float64 `json:"cpu"`
+	Memory     float64 `json:"memory"`
+	MemoryUsed float64 `json:"memory_used"`
+	Disk       float64 `json:"disk"`
+	Running    bool    `json:"running"`
+}

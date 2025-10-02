@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"guthub.com/pardnchiu/go-qemu/internal/model"
+	"github.com/pardnchiu/go-qemu/internal/model"
 )
 
 func (s *Service) assignIP() (string, int, error) {
@@ -69,10 +69,10 @@ func (s *Service) assignIP() (string, int, error) {
 			return result.IP, result.VMID, nil
 		}
 	case <-time.After(10 * time.Second):
-		return "", 0, fmt.Errorf("檢查 IP 超時")
+		return "", 0, fmt.Errorf("timeout: no available IP found")
 	}
 
-	return "", 0, fmt.Errorf("找不到可用的 IP (150-199)")
+	return "", 0, fmt.Errorf("cannot find available IP")
 }
 
 func (s *Service) checkIPAvailable(

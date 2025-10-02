@@ -2,12 +2,12 @@ package service
 
 import (
 	"fmt"
-	"os/exec"
 	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/pardnchiu/go-qemu/internal/util"
 )
 
 func (s *Service) Reboot(c *gin.Context, vmid int) error {
@@ -19,49 +19,33 @@ func (s *Service) Reboot(c *gin.Context, vmid int) error {
 	c.Header("Connection", "keep-alive")
 	c.Writer.Flush()
 
-	var step string
-
-	// * 1. Reboot VM
+	// 1. Reboot VM
+	step := "rebooting VM"
 	stepStart := time.Now()
 	isMain, _, ip := s.getVMIDsNode(vmid)
-
-	if isMain {
-		step = "rebooting VM"
-		s.SSE(c, step, "info", "[*] rebooting VM")
-		cmd := exec.Command("qm", "reboot", strconv.Itoa(vmid))
-		if err := cmd.Run(); err != nil {
-			err = fmt.Errorf("[-] failed to reboot VM: %v", err)
-			s.SSE(c, step, "error", err.Error())
-			return err
-		}
-	} else {
-		step = "rebooting VM via SSH"
-		s.SSE(c, step, "processing", "[*] starting VM via SSH")
-		args := []string{
-			"-o", "ConnectTimeout=10",
-			"-o", "StrictHostKeyChecking=no",
-			fmt.Sprintf("root@%s", ip),
-			"qm", "reboot", strconv.Itoa(vmid),
-		}
-		cmd := exec.Command("ssh", args...)
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			err = fmt.Errorf("[-] failed to reboot VM via SSH: %v, output: %s", err, string(output))
-			s.SSE(c, step, "error", err.Error())
-			return err
-		}
+	cmdArgs := []string{
+		"reboot", strconv.Itoa(vmid),
 	}
+
+	cmd := s.getCommand(isMain, ip, cmdArgs...)
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		err = fmt.Errorf("[-] failed to reboot VM: %v, output: %s", err, string(output))
+		return err
+	}
+
 	elapsed := time.Since(stepStart)
 	s.SSE(c, step, "success", fmt.Sprintf("[+] VM rebooting (%.2fs)", elapsed.Seconds()))
 
-	// * 2. Wait for SSH connection
+	// 2. Wait for SSH connection
 	stepStart = time.Now()
 	step = "waiting for SSH"
-	osUser, err := s.GetOSUser(vmid)
+	osUser, err := util.GetOSUser(vmid)
 	if err != nil {
-		err = fmt.Errorf("[-] failed to get OS user: %v", err)
-		s.SSE(c, step, "info", err.Error())
-		return nil
+		err = fmt.Errorf("[-] failed to get VM list: %v", err)
+		s.SSE(c, step, "error", err.Error())
+		return err
 	}
 
 	if err := s.CheckAlive(c, osUser, vmid); err != nil {
@@ -73,7 +57,7 @@ func (s *Service) Reboot(c *gin.Context, vmid int) error {
 	elapsed = time.Since(stepStart)
 	s.SSE(c, step, "success", fmt.Sprintf("[+] VM is ready (%.2fs)", elapsed.Seconds()))
 
-	// * 3. Finalizing
+	// 3. Finalizing
 	step = "finalizing"
 	time.Sleep(5 * time.Second)
 	s.SSE(c, step, "info", "[+] VM rebooted successfully")

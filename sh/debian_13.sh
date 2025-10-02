@@ -40,27 +40,20 @@ exit 1
 EOF
 sudo chmod +x /usr/bin/chpasswd
 
-# 等待 apt 鎖定解除
 echo "waiting for package manager to be available"
 wait_for_apt() {
-  while ! apt-get check >/dev/null 2>&1; do
+  while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || \
+        sudo fuser /var/lib/apt/lists/lock >/dev/null 2>&1 || \
+        sudo fuser /var/cache/apt/archives/lock >/dev/null 2>&1; do
     sleep 1
   done
 }
-
 wait_for_apt
 
-# 停止可能的自動更新服務
-# echo "停止自動更新服務"
-# sudo systemctl stop unattended-upgrades 2>/dev/null || true
-# sudo systemctl disable unattended-upgrades 2>/dev/null || true
+sudo systemctl stop unattended-upgrades 2>/dev/null || true
+sudo systemctl disable unattended-upgrades 2>/dev/null || true
+sudo killall apt apt-get dpkg 2>/dev/null || true
 
-# 等待 cloud-init 完成
-# echo "等待 cloud-init 完成"
-# sudo cloud-init status --wait || true
-
-# # 再次等待 apt 可用
-# wait_for_apt
 
 # 設定套件源
 echo "editing sources.list"
@@ -106,13 +99,12 @@ sudo timedatectl set-timezone Asia/Taipei
 # 設定系統參數
 echo "setting sysctl"
 echo "net.ipv4.icmp_echo_ignore_all = 1" | sudo tee -a /etc/sysctl.conf > /dev/null
-echo "net.ipv6.conf.all.disable_ipv6 = 1" | sudo tee -a /etc/sysctl.conf > /dev/null || true
 echo "fs.inotify.max_user_watches=524288" | sudo tee -a /etc/sysctl.conf > /dev/null
 sudo sysctl -p || true
 
 # 更新 GRUB 設定
 echo "updating GRUB configuration"
-sudo sed -i -e "s/GRUB_CMDLINE_LINUX=\"/GRUB_CMDLINE_LINUX=\"ipv6.disable=1 /g" /etc/default/grub
+sudo sed -i -e "s/GRUB_CMDLINE_LINUX=\"/GRUB_CMDLINE_LINUX=\"ipv6.disable=0 /g" /etc/default/grub
 sudo update-grub
 
 # 建立 swap 檔案

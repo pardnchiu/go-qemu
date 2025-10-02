@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"guthub.com/pardnchiu/go-qemu/internal/model"
+	"github.com/pardnchiu/go-qemu/internal/model"
 
 	"github.com/gin-gonic/gin"
 )
@@ -25,8 +25,8 @@ func (s *Service) Install(config *model.Config, c *gin.Context) error {
 	startTime := time.Now()
 	var step string
 
-	// * Preparation steps
-	// * > 1. assign VMID if not specified
+	// Preparation steps
+	// > 1. assign VMID if not specified
 	s.SSE(c, step, "processing", "[*] start VM installation")
 	stepStart := time.Now()
 	step = "preparation > checking VMID"
@@ -45,7 +45,7 @@ func (s *Service) Install(config *model.Config, c *gin.Context) error {
 		s.SSE(c, step, "processing", fmt.Sprintf("[*] using specified VMID: %d (%.2fs)", config.ID, elapsed.Seconds()))
 	}
 
-	// * > 2. assign IP based on gateway and VMID
+	// > 2. assign IP based on gateway and VMID
 	step = "preparation > assigning IP"
 	stepStart = time.Now()
 	ipParts := strings.Split(s.Gateway, ".")
@@ -60,22 +60,62 @@ func (s *Service) Install(config *model.Config, c *gin.Context) error {
 	elapsed := time.Since(stepStart)
 	s.SSE(c, step, "success", fmt.Sprintf("[+] assigned IP: %s (%.2fs)", config.IP, elapsed.Seconds()))
 
-	// * > 3. Disk size check
+	// 添加 CPU / RAM 最大限制
+	stepStart = time.Now()
+	step = "preparation > validating CPU and RAM"
+	envMaxCPU := os.Getenv("VM_MAX_CPU")
+	maxCPU, err := strconv.Atoi(envMaxCPU)
+	if err != nil {
+		maxCPU = 0
+	}
+	if config.CPU <= 0 {
+		s.SSE(c, step, "processing", "[*] setting CPU to minimum 1")
+		config.CPU = 1
+	} else if maxCPU != 0 && config.CPU > maxCPU {
+		s.SSE(c, step, "processing", fmt.Sprintf("[*] setting CPU to maximum %d", maxCPU))
+		config.CPU = maxCPU
+	}
+	envMaxRAM := os.Getenv("VM_MAX_RAM")
+	maxRAM, err := strconv.Atoi(envMaxRAM)
+	if err != nil {
+		maxRAM = 0
+	}
+	if config.RAM < 512 {
+		s.SSE(c, step, "processing", "[*] setting RAM to minimum 512 for ensure system stability")
+		config.RAM = 512
+	} else if maxRAM != 0 && config.RAM > maxRAM {
+		s.SSE(c, step, "processing", fmt.Sprintf("[*] setting RAM to maximum %d", maxRAM))
+		config.RAM = maxRAM
+	}
+	elapsed = time.Since(stepStart)
+	s.SSE(c, step, "success", fmt.Sprintf("[+] CPU and RAM validated (%.2fs)", elapsed.Seconds()))
+
+	// > 3. Disk size check
 	stepStart = time.Now()
 	step = "preparation > validating disk size"
 	diskSize, _ := strconv.Atoi(strings.TrimSuffix(config.Disk, "G"))
+	envMaxDisk := os.Getenv("VM_MAX_DISK")
+	maxDisk, err := strconv.Atoi(envMaxDisk)
+	if err != nil {
+		maxDisk = 0
+	}
 	if diskSize < 16 {
 		s.SSE(c, step, "processing", "[*] setting disk to minimum 16G")
 		config.Disk = "16G"
+	} else if maxDisk != 0 && diskSize >= maxDisk {
+		s.SSE(c, step, "processing", fmt.Sprintf("[*] setting disk to maximum %dG", maxDisk))
+		config.Disk = fmt.Sprintf("%dG", maxDisk)
+	} else {
+		config.Disk = fmt.Sprintf("%dG", diskSize)
 	}
 	elapsed = time.Since(stepStart)
 	s.SSE(c, step, "success", fmt.Sprintf("[+] disk size validated (%.2fs)", elapsed.Seconds()))
 
-	// * > 4. set default config values
+	// > 4. set default config values
 	stepStart = time.Now()
 	step = "preparation > setting default config values"
 	s.SSE(c, step, "processing", "[*] set default config values")
-	if err := s.SetDefaults(config); err != nil {
+	if err := s.initConfig(config); err != nil {
 		err = fmt.Errorf("[-] failed to set default config values: %w", err)
 		s.SSE(c, step, "error", err.Error())
 		return err
@@ -83,7 +123,7 @@ func (s *Service) Install(config *model.Config, c *gin.Context) error {
 	elapsed = time.Since(stepStart)
 	s.SSE(c, step, "success", fmt.Sprintf("[+] default config values set (%.2fs)", elapsed.Seconds()))
 
-	// * > 5. check storage pool existence
+	// > 5. check storage pool existence
 	stepStart = time.Now()
 	step = "preparation > checking storage pool"
 	config.Storage = os.Getenv("ASSIGN_STORAGE")
@@ -96,8 +136,8 @@ func (s *Service) Install(config *model.Config, c *gin.Context) error {
 	elapsed = time.Since(stepStart)
 	s.SSE(c, step, "success", fmt.Sprintf("[+] storage pool %s is available (%.2fs)", config.Storage, elapsed.Seconds()))
 
-	// * OS preparation
-	// * > 1. get official OS image download link
+	// OS preparation
+	// > 1. get official OS image download link
 	stepStart = time.Now()
 	step = "OS preparation > getting OS image"
 	s.SSE(c, step, "processing", "[*] OS preparation")
@@ -111,7 +151,7 @@ func (s *Service) Install(config *model.Config, c *gin.Context) error {
 	elapsed = time.Since(stepStart)
 	s.SSE(c, step, "success", fmt.Sprintf("[+] OS image URL obtained (%.2fs)", elapsed.Seconds()))
 
-	// * > 2. check OS image URL availability
+	// > 2. check OS image URL availability
 	stepStart = time.Now()
 	step = "OS preparation > validating OS image URL"
 	s.SSE(c, step, "processing", "[*] check OS image URL availability")
@@ -123,7 +163,7 @@ func (s *Service) Install(config *model.Config, c *gin.Context) error {
 	elapsed = time.Since(stepStart)
 	s.SSE(c, step, "success", fmt.Sprintf("[+] OS image URL is valid (%.2fs)", elapsed.Seconds()))
 
-	// * > 3. download OS image if not exists
+	// > 3. download OS image if not exists
 	stepStart = time.Now()
 	if _, err := os.Stat(imageFilepath); os.IsNotExist(err) {
 		step = "OS preparation > downloading OS image"
@@ -141,7 +181,7 @@ func (s *Service) Install(config *model.Config, c *gin.Context) error {
 		s.SSE(c, step, "success", fmt.Sprintf("[+] using OS image (%.2fs)", elapsed.Seconds()))
 	}
 
-	// * SSH preparation
+	// SSH preparation
 	stepStart = time.Now()
 	step = "SSH preparation > checking SSH key"
 	s.SSE(c, step, "processing", "[*] SSH preparation")
@@ -165,7 +205,7 @@ func (s *Service) Install(config *model.Config, c *gin.Context) error {
 	elapsed = time.Since(stepStart)
 	s.SSE(c, step, "success", fmt.Sprintf("[+] completed SSH preparation (%.2fs)", elapsed.Seconds()))
 
-	// * VM creation
+	// VM creation
 	stepStart = time.Now()
 	step = "VM creation > creating VM"
 	s.SSE(c, step, "processing", "[*] VM creation")
@@ -177,7 +217,7 @@ func (s *Service) Install(config *model.Config, c *gin.Context) error {
 	elapsed = time.Since(stepStart)
 	s.SSE(c, step, "success", fmt.Sprintf("[+] VM created successfully (%.2fs)", elapsed.Seconds()))
 
-	// * 2. import disk image
+	// 2. import disk image
 	stepStart = time.Now()
 	step = "VM creation > importing disk image"
 	s.SSE(c, step, "processing", "[*] import disk image")
@@ -190,7 +230,7 @@ func (s *Service) Install(config *model.Config, c *gin.Context) error {
 	elapsed = time.Since(stepStart)
 	s.SSE(c, step, "success", fmt.Sprintf("[+] disk image imported successfully (%.2fs)", elapsed.Seconds()))
 
-	// * VM initialization
+	// VM initialization
 	stepStart = time.Now()
 	step = "VM initialization > initializing configuration"
 	s.SSE(c, step, "processing", "[*] initializing VM")
@@ -203,7 +243,7 @@ func (s *Service) Install(config *model.Config, c *gin.Context) error {
 	elapsed = time.Since(stepStart)
 	s.SSE(c, step, "success", fmt.Sprintf("[+] VM initialized successfully (%.2fs)", elapsed.Seconds()))
 
-	// * 1. Migrate VM to specified node if needed
+	// 1. Migrate VM to specified node if needed
 	if config.Node != "" {
 		stepStart = time.Now()
 		step = "VM initialization > migrating VM"
@@ -225,7 +265,7 @@ func (s *Service) Install(config *model.Config, c *gin.Context) error {
 		s.SSE(c, step, "success", fmt.Sprintf("[+] VM migrated to node %s successfully (%.2fs)", config.Node, elapsed.Seconds()))
 	}
 
-	// * 2. Start VM
+	// 2. Start VM
 	stepStart = time.Now()
 	isMain, _, ip := s.getVMIDsNode(config.ID)
 	if isMain {
@@ -256,7 +296,7 @@ func (s *Service) Install(config *model.Config, c *gin.Context) error {
 	}
 	s.SSE(c, step, "success", fmt.Sprintf("[+] VM started successfully (%.2fs)", elapsed.Seconds()))
 
-	// * 3. Wait for SSH connection
+	// 3. Wait for SSH connection
 	stepStart = time.Now()
 	step = "VM initialization > waiting for SSH"
 	s.SSE(c, step, "processing", "[*] waiting for VM start")
@@ -273,11 +313,11 @@ func (s *Service) Install(config *model.Config, c *gin.Context) error {
 	s.SSE(c, step, "processing", "[*] waiting for system to stabilize")
 	time.Sleep(5 * time.Second)
 
-	// * 4. SSH initialization
+	// 4. SSH initialization
 	stepStart = time.Now()
 	step = "VM initialization > SSH initialization"
 	s.SSE(c, step, "processing", "[*] SSH initialization")
-	if err := s.initialBySSH(config, c); err != nil {
+	if err := s.initialWithSSH(config, c); err != nil {
 		s.clean(config)
 		err = fmt.Errorf("[-] failed to perform SSH initialization: %w", err)
 		s.SSE(c, step, "error", err.Error())
@@ -286,7 +326,7 @@ func (s *Service) Install(config *model.Config, c *gin.Context) error {
 	elapsed = time.Since(stepStart)
 	s.SSE(c, step, "success", fmt.Sprintf("[+] SSH initialization completed (%.2fs)", elapsed.Seconds()))
 
-	// * 5. Reboot VM to apply all settings
+	// 5. Reboot VM to apply all settings
 	stepStart = time.Now()
 	if isMain {
 		step = "VM initialization > rebooting VM"
@@ -317,7 +357,7 @@ func (s *Service) Install(config *model.Config, c *gin.Context) error {
 	}
 	s.SSE(c, step, "success", fmt.Sprintf("[+] reboot initiated (%.2fs)", elapsed.Seconds()))
 
-	// * 6. Wait for SSH connection again
+	// 6. Wait for SSH connection again
 	stepStart = time.Now()
 	step = "VM initialization > waiting for checking completed after reboot"
 	s.SSE(c, step, "processing", "[*] waiting for VM reboot")
@@ -328,8 +368,6 @@ func (s *Service) Install(config *model.Config, c *gin.Context) error {
 		return err
 	}
 	elapsed = time.Since(stepStart)
-
-	s.RecordOSUser(config.ID, config.OS)
 
 	time.Sleep(5 * time.Second)
 	step = "VM initialization > finalizing"

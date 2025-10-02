@@ -1,7 +1,6 @@
 package service
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
@@ -10,20 +9,25 @@ import (
 	"strings"
 	"time"
 
-	"guthub.com/pardnchiu/go-qemu/internal/model"
+	"github.com/pardnchiu/go-qemu/internal/model"
 
 	"github.com/gin-gonic/gin"
 )
 
 func (s *Service) createVM(config *model.Config) error {
+	version, err := s.GetClusterCPUType()
+	if err != nil {
+		version = "kvm64"
+	}
+
 	args := []string{
 		"create", strconv.Itoa(config.ID),
 		"--name", config.Name,
 		"--cores", strconv.Itoa(config.CPU),
-		// * needs to be changed if nodes have different CPU architectures, can use "x86-64-v*" for compatibility
-		// * you can get your CPU supported types by:
-		// * curl -s https://gist.githubusercontent.com/pardnchiu/561ef0581911eac7aed33c898a1a2b21/raw/ec65cc25c67703d7f8aed8d2d5859665e47dc117/cputype | bash
-		"--cpu", "host",
+		// needs to be changed if nodes have different CPU architectures, can use "x86-64-v*" for compatibility
+		// you can get your CPU supported types by:
+		// curl -s https://gist.githubusercontent.com/pardnchiu/561ef0581911eac7aed33c898a1a2b21/raw/ec65cc25c67703d7f8aed8d2d5859665e47dc117/cputype | bash
+		"--cpu", version,
 		"--scsihw", "virtio-scsi-pci",
 		"--memory", strconv.Itoa(config.RAM),
 		"--ostype", "l26",
@@ -31,11 +35,22 @@ func (s *Service) createVM(config *model.Config) error {
 		"--net0", "virtio,bridge=vmbr0",
 		"--serial0", "socket",
 	}
+	envBalloonMin := os.Getenv("VM_BALLOON_MIN")
+	balloonMin, err := strconv.Atoi(envBalloonMin)
+	if err != nil {
+		balloonMin = 0
+	}
 
-	if config.RAM >= 8192 {
-		args = append(args, "--numa", "1")
-		sharingMemory := config.RAM - 4096
-		args = append(args, "--balloon", strconv.Itoa(sharingMemory))
+	if balloonMin != 0 && config.RAM > balloonMin {
+		if config.RAM >= 65536 {
+			args = append(args, "--numa", "1")
+			sharingMemory := 49152
+			args = append(args, "--balloon", strconv.Itoa(sharingMemory))
+		} else if config.RAM >= balloonMin+1024 {
+			args = append(args, "--numa", "1")
+			sharingMemory := config.RAM - balloonMin
+			args = append(args, "--balloon", strconv.Itoa(sharingMemory))
+		}
 	}
 
 	cmd := exec.Command("qm", args...)
@@ -56,7 +71,7 @@ func (s *Service) initialVM(config *model.Config) error {
 		"id_ecdsa.pub",
 	}
 
-	// * 1. get SSH public key
+	// 1. get SSH public key
 	var pubkey []byte
 	var err error
 	for _, e := range list {
@@ -69,7 +84,7 @@ func (s *Service) initialVM(config *model.Config) error {
 		return fmt.Errorf("no SSH public key found")
 	}
 
-	// * 2. create a temporary file to combine multiple public keys
+	// 2. create a temporary file to combine multiple public keys
 	file, err := os.CreateTemp("", "combined-keys-*.txt")
 	if err != nil {
 		return err
@@ -85,7 +100,7 @@ func (s *Service) initialVM(config *model.Config) error {
 		}
 	}
 
-	// * 3. append .pubkey-admin content if exists
+	// 3. append .pubkey-admin content if exists
 	if adminPubkey, err := os.ReadFile(".go_qemu_pubkey_admin"); err == nil {
 		if _, err := file.Write(adminPubkey); err != nil {
 			return err
@@ -97,59 +112,59 @@ func (s *Service) initialVM(config *model.Config) error {
 		}
 	}
 
-	// * 4. append user provided public key
+	// 4. append user provided public key
 	if _, err := file.WriteString(config.Pubkey + "\n"); err != nil {
 		return err
 	}
 	file.Close()
 
-	// * 5. set SSH keys to VM
+	// 5. set SSH keys to VM
 	cmd := exec.Command("qm", "set", strconv.Itoa(config.ID), "--sshkeys", file.Name())
 	if err := cmd.Run(); err != nil {
 		return err
 	}
 
-	// * 6. set password to VM
+	// 6. set password to VM
 	cmd = exec.Command("qm", "set", strconv.Itoa(config.ID), "--cipassword", config.Passwd)
 	if err := cmd.Run(); err != nil {
 		return err
 	}
 
-	// * 7. disable cloud-init package upgrade to avoid breaking the initialization
+	// 7. disable cloud-init package upgrade to avoid breaking the initialization
 	cmd = exec.Command("qm", "set", strconv.Itoa(config.ID), "--ciupgrade", "0") // 禁用套件升級
 	if err := cmd.Run(); err != nil {
 		return err
 	}
 
-	// * 8. set os type tag to VM
+	// 8. set os type tag to VM
 	osTag := strings.ToLower(config.OS)
 	cmd = exec.Command("qm", "set", strconv.Itoa(config.ID), "--tags", osTag)
 	if err := cmd.Run(); err != nil {
 		return err
 	}
 
-	// * 9. set disk to VM
+	// 9. set disk to VM
 	diskConfig := fmt.Sprintf("%s:vm-%d-disk-0", config.Storage, config.ID)
 	cmd = exec.Command("qm", "set", strconv.Itoa(config.ID), "--scsi0", diskConfig)
 	if err := cmd.Run(); err != nil {
 		return err
 	}
 
-	// * 10. set cloud-init to VM
+	// 10. set cloud-init to VM
 	cloudInitConfig := fmt.Sprintf("%s:cloudinit", config.Storage)
 	cmd = exec.Command("qm", "set", strconv.Itoa(config.ID), "--ide2", cloudInitConfig)
 	if err := cmd.Run(); err != nil {
 		return err
 	}
 
-	// * 11. set boot order to VM
+	// 11. set boot order to VM
 	cmd = exec.Command("qm", "set", strconv.Itoa(config.ID), "--boot", "c", "--bootdisk", "scsi0")
 	if err := cmd.Run(); err != nil {
 		return err
 	}
 
-	// * 12. resize disk to user specified size
-	// * add retry to avoid error
+	// 12. resize disk to user specified size
+	// add retry to avoid error
 	for i := 0; i < 3; i++ {
 		cmd = exec.Command("qm", "resize", strconv.Itoa(config.ID), "scsi0", config.Disk)
 		if err := cmd.Run(); err != nil {
@@ -162,7 +177,7 @@ func (s *Service) initialVM(config *model.Config) error {
 		}
 	}
 
-	// * 13. set IP and gateway to VM
+	// 13. set IP and gateway to VM
 	ipConfig := fmt.Sprintf("ip=%s,gw=%s", config.IP, config.Gateway)
 	cmd = exec.Command("qm", "set", strconv.Itoa(config.ID), "--ipconfig0", ipConfig)
 	return cmd.Run()
@@ -170,7 +185,7 @@ func (s *Service) initialVM(config *model.Config) error {
 
 func (s *Service) waitForSSH(config *model.Config) error {
 	ip := strings.Split(config.IP, "/")[0]
-	maxRetries := 60
+	maxRetries := 3
 
 	for i := 0; i < maxRetries; i++ {
 		cmd := exec.Command("ssh",
@@ -211,7 +226,7 @@ func (s *Service) getMainIP() (string, error) {
 	return fmt.Sprintf("%s:%s", nodeValue, port), nil
 }
 
-func (s *Service) initialBySSH(config *model.Config, c *gin.Context) error {
+func (s *Service) initialWithSSH(config *model.Config, c *gin.Context) error {
 	mainIP, err := s.getMainIP()
 	if err != nil {
 		return err
@@ -238,54 +253,14 @@ func (s *Service) initialBySSH(config *model.Config, c *gin.Context) error {
 		command,
 	)
 
-	// 取得 stdout 和 stderr 的 pipe
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
+	if err := s.runCommandSSE(c, cmd, "SSH initialization", "processing"); err != nil {
 		return err
 	}
-
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return err
-	}
-
-	// 啟動指令
-	if err := cmd.Start(); err != nil {
-		return err
-	}
-
-	// 讀取並串流輸出
-	go func() {
-		scanner := bufio.NewScanner(stdout)
-		for scanner.Scan() {
-			line := scanner.Text()
-			s.SSE(c, "SSH initialization", "processing", fmt.Sprintf("  %s", line))
-		}
-	}()
-
-	go func() {
-		scanner := bufio.NewScanner(stderr)
-		for scanner.Scan() {
-			line := scanner.Text()
-			// 根據內容判斷是否為實際錯誤
-			if strings.Contains(line, "Error:") || strings.Contains(line, "Failed:") {
-				s.SSE(c, "SSH initialization", "processing", fmt.Sprintf("  Error: %s", line))
-			} else {
-				s.SSE(c, "SSH initialization", "processing", fmt.Sprintf("  %s", line))
-			}
-		}
-	}()
-
-	// 等待指令完成
-	if err := cmd.Wait(); err != nil {
-		return fmt.Errorf("SSH 初始化失敗: %w", err)
-	}
-
 	return nil
 }
 
 func (s *Service) CheckAlive(c *gin.Context, os string, id int) error {
-	maxRetries := 60
+	maxRetries := 3
 	ipParts := strings.Split(s.Gateway, ".")
 	if len(ipParts) != 4 {
 		err := fmt.Errorf("[-] invalid gateway format: %s", s.Gateway)
@@ -310,5 +285,5 @@ func (s *Service) CheckAlive(c *gin.Context, os string, id int) error {
 		}
 		time.Sleep(5 * time.Second)
 	}
-	return fmt.Errorf("SSH 連線逾時")
+	return fmt.Errorf("[-] SSH timeout")
 }

@@ -25,11 +25,11 @@ chmod +x /usr/bin/passwd
 
 echo "waiting for package manager to be available"
 wait_for_dnf() {
-  while ! dnf repolist >/dev/null 2>&1; do
-    sleep 1
-  done
+    while sudo fuser /var/lib/rpm/.rpm.lock >/dev/null 2>&1 || \
+          sudo fuser /var/cache/dnf/metadata_lock.pid >/dev/null 2>&1; do
+        sleep 1
+    done
 }
-
 wait_for_dnf
 
 # 更新系統
@@ -55,13 +55,12 @@ timedatectl set-timezone Asia/Taipei
 # 設定系統參數
 echo "setting sysctl"
 echo "net.ipv4.icmp_echo_ignore_all = 1" | sudo tee -a /etc/sysctl.conf > /dev/null
-echo "net.ipv6.conf.all.disable_ipv6 = 1" | sudo tee -a /etc/sysctl.conf > /dev/null || true
 echo "fs.inotify.max_user_watches=524288" | sudo tee -a /etc/sysctl.conf > /dev/null
 sudo sysctl -p || true
 
 # 更新 GRUB 設定
 echo "updating GRUB configuration"
-sed -i -e "s/GRUB_CMDLINE_LINUX=\"/GRUB_CMDLINE_LINUX=\"ipv6.disable=1 /g" /etc/default/grub
+sed -i -e "s/GRUB_CMDLINE_LINUX=\"/GRUB_CMDLINE_LINUX=\"ipv6.disable=0 /g" /etc/default/grub
 grub2-mkconfig -o /boot/grub2/grub.cfg
 
 # 建立 swap 檔案

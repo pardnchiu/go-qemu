@@ -5,18 +5,19 @@ import (
 	"strconv"
 )
 
-func (s *Service) Shutdown(vmid int) error {
+func (s *Service) CPU(vmid, cpu int) error {
 	isMain, _, ip := s.getVMIDsNode(vmid)
 
 	cmdArgs := []string{
-		"shutdown", strconv.Itoa(vmid),
+		"set", strconv.Itoa(vmid),
+		"--cores", strconv.Itoa(cpu),
 	}
 
 	cmd := s.getCommand(isMain, ip, cmdArgs...)
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		err = fmt.Errorf("[-] failed to shutdown VM: %v, output: %s", err, string(output))
+		err = fmt.Errorf("[-] failed to set CPU: %v, output: %s", err, string(output))
 		return err
 	}
 

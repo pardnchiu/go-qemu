@@ -5,18 +5,19 @@ import (
 	"strconv"
 )
 
-func (s *Service) Shutdown(vmid int) error {
+func (s *Service) Disk(vmid int, disk string) error {
 	isMain, _, ip := s.getVMIDsNode(vmid)
 
 	cmdArgs := []string{
-		"shutdown", strconv.Itoa(vmid),
+		"disk", "resize", strconv.Itoa(vmid),
+		"scsi0", fmt.Sprintf("+%s", disk),
 	}
 
 	cmd := s.getCommand(isMain, ip, cmdArgs...)
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		err = fmt.Errorf("[-] failed to shutdown VM: %v, output: %s", err, string(output))
+		err = fmt.Errorf("failed to append disk: %v, output: %s", err, string(output))
 		return err
 	}
 

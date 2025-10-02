@@ -1,32 +1,34 @@
 package handler
 
 import (
-	"fmt"
 	"net/http"
-	"os"
-	"slices"
 	"strconv"
-	"strings"
 
-	"guthub.com/pardnchiu/go-qemu/internal/model"
+	"github.com/pardnchiu/go-qemu/internal/util"
 
 	"github.com/gin-gonic/gin"
 )
 
 func (h *Handler) Stop(c *gin.Context) {
-	if !h.checkIP(c) {
-		c.String(http.StatusForbidden, "this IP is not allowed to perform this action")
+	if !util.CheckIP(c.ClientIP()) {
+		c.String(http.StatusForbidden, "this IP is not allowed to perform this action\n")
 		return
 	}
 
-	isAvailable, vmid := h.checkAvailable(c)
-	if !isAvailable {
+	vmid, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
 		c.String(http.StatusInternalServerError, "failed to stop VM\n")
 		return
 	}
 
-	if err := h.service.Stop(vmid); err != nil {
-		c.String(http.StatusInternalServerError, "failed to stop VM: %v", err)
+	httpStatus, _, err := util.CheckID(vmid, false)
+	if err != nil {
+		c.String(httpStatus, err.Error())
+		return
+	}
+
+	if err := h.Service.Stop(vmid); err != nil {
+		c.String(http.StatusInternalServerError, "failed to stop VM: %v\n", err)
 		return
 	}
 
@@ -34,19 +36,25 @@ func (h *Handler) Stop(c *gin.Context) {
 }
 
 func (h *Handler) Shutdown(c *gin.Context) {
-	if !h.checkIP(c) {
-		c.String(http.StatusForbidden, "this IP is not allowed to perform this action")
+	if !util.CheckIP(c.ClientIP()) {
+		c.String(http.StatusForbidden, "this IP is not allowed to perform this action\n")
 		return
 	}
 
-	isAvailable, vmid := h.checkAvailable(c)
-	if !isAvailable {
+	vmid, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
 		c.String(http.StatusInternalServerError, "failed to shutdown VM\n")
 		return
 	}
 
-	if err := h.service.Shutdown(vmid); err != nil {
-		c.String(http.StatusInternalServerError, "failed to shutdown VM: %v", err)
+	httpStatus, _, err := util.CheckID(vmid, false)
+	if err != nil {
+		c.String(httpStatus, err.Error())
+		return
+	}
+
+	if err := h.Service.Shutdown(vmid); err != nil {
+		c.String(http.StatusInternalServerError, "failed to shutdown VM: %v\n", err)
 		return
 	}
 
@@ -54,108 +62,135 @@ func (h *Handler) Shutdown(c *gin.Context) {
 }
 
 func (h *Handler) Destroy(c *gin.Context) {
-	if !h.checkIP(c) {
-		c.String(http.StatusForbidden, "this IP is not allowed to perform this action")
+	if !util.CheckIP(c.ClientIP()) {
+		c.String(http.StatusForbidden, "this IP is not allowed to perform this action\n")
 		return
 	}
 
-	isAvailable, vmid := h.checkAvailable(c)
-	if !isAvailable {
+	vmid, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
 		c.String(http.StatusInternalServerError, "failed to destroy VM\n")
 		return
 	}
 
-	if err := h.service.Destroy(vmid); err != nil {
-		c.String(http.StatusInternalServerError, "failed to destroy VM: %v", err)
+	httpStatus, _, err := util.CheckID(vmid, true)
+	if err != nil {
+		c.String(httpStatus, err.Error())
+		return
+	}
+
+	if err := h.Service.Destroy(vmid); err != nil {
+		c.String(http.StatusInternalServerError, "failed to destroy VM: %v\n", err)
 		return
 	}
 
 	c.String(http.StatusOK, "ok")
 }
 
-func (h *Handler) checkIP(c *gin.Context) bool {
-	// * disable if not in ALLOW_IPS
-	clientIP := c.ClientIP()
-	allowIPs := os.Getenv("ALLOW_IPS")
-	if allowIPs != "0.0.0.0" && !slices.Contains(strings.Split(allowIPs, ","), clientIP) {
-		return false
+func (h *Handler) CPU(c *gin.Context) {
+	if !util.CheckIP(c.ClientIP()) {
+		c.String(http.StatusForbidden, "this IP is not allowed to perform this action\n")
+		return
 	}
-	return true
-}
 
-func (h *Handler) checkAvailable(c *gin.Context) (bool, int) {
 	vmid, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.String(http.StatusBadRequest, "VMID is invalid")
-		return false, 0
-	}
-
-	return true, vmid
-}
-
-// * SSE
-func (h *Handler) Install(c *gin.Context) {
-	if !h.checkIP(c) {
-		c.String(http.StatusForbidden, "this IP is not allowed to perform this action")
+		c.String(http.StatusInternalServerError, "failed to destroy VM\n")
 		return
 	}
 
-	var config model.Config
-
-	if err := c.ShouldBindJSON(&config); err != nil {
-		c.JSON(http.StatusBadRequest, model.Response{
-			Success: false,
-			Message: fmt.Sprintf("please check your input: %v", err),
-		})
-		return
-	}
-
-	h.service.Install(&config, c)
-
-	c.Writer.WriteString("event: close\ndata: {}\n\n")
-	c.Writer.Flush()
-}
-
-func (h *Handler) Start(c *gin.Context) {
-	if !h.checkIP(c) {
-		c.String(http.StatusForbidden, "this IP is not allowed to perform this action")
-		return
-	}
-
-	isAvailable, vmid := h.checkAvailable(c)
-	if !isAvailable {
-		c.String(http.StatusInternalServerError, "failed to start VM\n")
-		return
-	}
-
-	err := h.service.Start(c, vmid)
+	httpStatus, _, err := util.CheckID(vmid, true)
 	if err != nil {
-		c.String(http.StatusInternalServerError, "failed to start VM: %v", err)
+		c.String(httpStatus, err.Error())
 		return
 	}
 
-	c.Writer.WriteString("event: close\ndata: {}\n\n")
-	c.Writer.Flush()
+	type reqBody struct {
+		CPU int `json:"cpu" binding:"required,min=1,max=32"`
+	}
+
+	var body reqBody
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.String(http.StatusBadRequest, "invalid request body: %v", err)
+		return
+	}
+
+	if err := h.Service.CPU(vmid, body.CPU); err != nil {
+		c.String(http.StatusInternalServerError, "failed to edit CPU: %v\n", err)
+		return
+	}
+
+	c.String(http.StatusOK, "ok")
 }
 
-func (h *Handler) Reboot(c *gin.Context) {
-	if !h.checkIP(c) {
-		c.String(http.StatusForbidden, "this IP is not allowed to perform this action")
+func (h *Handler) Memory(c *gin.Context) {
+	if !util.CheckIP(c.ClientIP()) {
+		c.String(http.StatusForbidden, "this IP is not allowed to perform this action\n")
 		return
 	}
 
-	isAvailable, vmid := h.checkAvailable(c)
-	if !isAvailable {
-		c.String(http.StatusInternalServerError, "failed to reboot VM\n")
-		return
-	}
-
-	err := h.service.Reboot(c, vmid)
+	vmid, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.String(http.StatusInternalServerError, "failed to reboot VM: %v", err)
+		c.String(http.StatusInternalServerError, "failed to destroy VM\n")
 		return
 	}
 
-	c.Writer.WriteString("event: close\ndata: {}\n\n")
-	c.Writer.Flush()
+	httpStatus, _, err := util.CheckID(vmid, true)
+	if err != nil {
+		c.String(httpStatus, err.Error())
+		return
+	}
+
+	type reqBody struct {
+		Memory int `json:"memory" binding:"required,min=512,max=32768"`
+	}
+
+	var body reqBody
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.String(http.StatusBadRequest, "invalid request body: %v", err)
+		return
+	}
+
+	if err := h.Service.Memory(vmid, body.Memory); err != nil {
+		c.String(http.StatusInternalServerError, "failed to edit memory: %v\n", err)
+		return
+	}
+
+	c.String(http.StatusOK, "ok")
+}
+
+func (h *Handler) Disk(c *gin.Context) {
+	if !util.CheckIP(c.ClientIP()) {
+		c.String(http.StatusForbidden, "this IP is not allowed to perform this action\n")
+		return
+	}
+
+	vmid, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.String(http.StatusInternalServerError, "failed to destroy VM\n")
+		return
+	}
+
+	httpStatus, _, err := util.CheckID(vmid, true)
+	if err != nil {
+		c.String(httpStatus, err.Error())
+		return
+	}
+
+	type reqBody struct {
+		Disk string `json:"disk"`
+	}
+
+	var body reqBody
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.String(http.StatusBadRequest, "invalid request body: %v", err)
+		return
+	}
+
+	if err := h.Service.Disk(vmid, body.Disk); err != nil {
+		c.String(http.StatusInternalServerError, "failed to append disk: %v\n", err)
+		return
+	}
+
+	c.String(http.StatusOK, "ok")
 }

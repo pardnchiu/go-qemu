@@ -50,7 +50,7 @@ func (s *Service) getOSImage(os, version string) (string, string, error) {
 }
 
 func (s *Service) checkOSImageURL(url string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, "HEAD", url, nil)
