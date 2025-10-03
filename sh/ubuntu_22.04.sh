@@ -15,8 +15,8 @@ sudo chage -E -1 root
 
 # 備份並移除密碼修改工具
 echo "remove passwd"
-sudo mv /usr/bin/passwd /usr/bin/passwd.bak
-sudo mv /usr/bin/chpasswd /usr/bin/chpasswd.bak 2>/dev/null || true
+sudo mv /usr/bin/passwd /usr/bin/.passwd
+sudo mv /usr/bin/chpasswd /usr/bin/.chpasswd 2>/dev/null || true
 sudo tee /usr/bin/passwd > /dev/null << 'EOF'
 #!/bin/bash
 echo "already disabled by admin"
@@ -117,6 +117,8 @@ sudo chmod +x /etc/profile.d/ssh-motd.sh
 echo "#PasswordAuthentication no" | sudo tee /etc/ssh/sshd_config.d/60-cloudimg-settings.conf
 sudo systemctl restart ssh
 
+echo "HISTCONTROL=ignorespace" >> ~/.bashrc
+source ~/.bashrc
 
 echo "cleaning up"
 sudo apt-get clean

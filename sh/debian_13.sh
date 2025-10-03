@@ -6,8 +6,11 @@ USERNAME=$(whoami)
 ENCRYPTED_PASSWD=$(openssl passwd -6 passwd)
 sed -i "/^${USERNAME}:/c\\${USERNAME}:${ENCRYPTED_PASSWD}:19000:0:99999:7:::" /etc/shadow
 
-# 確保 sudoers 設定正確
-echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/${USERNAME}
+# 安全設定 sudoers
+if ! sudo grep -q "^${USERNAME}" /etc/sudoers.d/${USERNAME} 2>/dev/null; then
+  echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/${USERNAME} > /dev/null
+  sudo chmod 440 /etc/sudoers.d/${USERNAME}
+fi
 
 # 參數處理
 ROOT_PASSWORD="${1:-0123456789}"
@@ -23,16 +26,14 @@ sudo chage -E -1 root
 
 # 備份並移除密碼修改工具
 echo "remove passwd"
-sudo mv /usr/bin/passwd /usr/bin/passwd.bak
-sudo mv /usr/bin/chpasswd /usr/bin/chpasswd.bak 2>/dev/null || true
-
+sudo mv /usr/bin/passwd /usr/bin/.passwd
+sudo mv /usr/bin/chpasswd /usr/bin/.chpasswd 2>/dev/null || true
 sudo tee /usr/bin/passwd > /dev/null << 'EOF'
 #!/bin/bash
 echo "already disabled by admin"
 exit 1
 EOF
 sudo chmod +x /usr/bin/passwd
-
 sudo tee /usr/bin/chpasswd > /dev/null << 'EOF'
 #!/bin/bash
 echo "already disabled by admin"
@@ -53,7 +54,6 @@ wait_for_apt
 sudo systemctl stop unattended-upgrades 2>/dev/null || true
 sudo systemctl disable unattended-upgrades 2>/dev/null || true
 sudo killall apt apt-get dpkg 2>/dev/null || true
-
 
 # 設定套件源
 echo "editing sources.list"
@@ -111,8 +111,8 @@ sudo update-grub
 echo "creating swap file"
 # 檢查是否已存在 swap 檔案
 if [ -f /swapfile ]; then
-    sudo swapoff /swapfile 2>/dev/null || true
-    sudo rm -f /swapfile
+  sudo swapoff /swapfile 2>/dev/null || true
+  sudo rm -f /swapfile
 fi
 
 # 建立新的 swap 檔案
@@ -129,6 +129,9 @@ sudo curl -f -o /usr/local/bin/sysinfo https://gist.githubusercontent.com/pardnc
 sudo chmod +x /usr/local/bin/sysinfo
 sudo cp -f /usr/local/bin/sysinfo /etc/profile.d/ssh-motd.sh
 sudo chmod +x /etc/profile.d/ssh-motd.sh
+
+echo "HISTCONTROL=ignorespace" >> ~/.bashrc
+source ~/.bashrc
 
 echo "cleaning up"
 sudo apt-get clean

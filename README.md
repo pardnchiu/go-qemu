@@ -1,9 +1,9 @@
 > [!Note]
-> This content is translated by LLM. Original text can be found [here](README.zh.md)
+> This is the English version of the documentation. Chinese version can be found [here](README.zh.md)
 
 # Go Qemu - Proxmox VM API
 
-> Go Qemu is a Proxmox VE virtual machine management API service developed in Go, **automatically downloads official images and completes end-to-end deployment**. Supports **one-click automated deployment** for Debian, Ubuntu, and RockyLinux.
+> Go Qemu is a Proxmox VE virtual machine management API service built with Go, featuring **automated official image downloads and end-to-end deployment**. Supports **one-click automated deployment** for Debian, Ubuntu, and RockyLinux.
 
 [![pkg](https://pkg.go.dev/badge/github.com/pardnchiu/go-qemu.svg)](https://pkg.go.dev/github.com/pardnchiu/go-qemu)
 [![version](https://img.shields.io/github/v/tag/pardnchiu/go-qemu?label=release)](https://github.com/pardnchiu/go-qemu/releases)
@@ -13,22 +13,22 @@
 
 ## Key Features
 
-### Complete Virtual Machine Lifecycle Management
-- Support for multiple Linux distributions (**automatic official image download and deployment**)
+### Complete VM Lifecycle Management
+- Support for multiple Linux distributions (**automated official image download and deployment**)
 - Real-time SSE streaming installation progress feedback
 - Intelligent IP address allocation and management
 - Complete SSH key configuration
 
-### Multi-node Cluster Support
-- Support for Proxmox VE cluster environments
+### Multi-Node Cluster Support
+- Proxmox VE cluster environment support
 - Remote node SSH operation support
 - Unified API for multi-node requests
 
-### Zero-configuration Deployment
-- Automatically downloads the latest cloud images from official sources, no manual image preparation required
-  - Debian: download from `cloud.debian.org`
-  - RockyLinux: download from `dl.rockylinux.org`
-  - Ubuntu: download from `cloud-images.ubuntu.com`
+### Zero-Configuration Deployment
+- Automatically downloads latest cloud images from official sources, no manual image preparation needed
+  - Debian: Downloads from `cloud.debian.org`
+  - RockyLinux: Downloads from `dl.rockylinux.org`
+  - Ubuntu: Downloads from `cloud-images.ubuntu.com`
 
 ## Usage
 
@@ -101,7 +101,7 @@ GET /api/vm/{id}/status
 POST /api/vm/{id}/shutdown
 ```
 
-#### Stop Virtual Machine (Force shutdown)
+#### Stop Virtual Machine (Force Shutdown)
 ```
 POST /api/vm/{id}/stop
 ```
@@ -109,6 +109,56 @@ POST /api/vm/{id}/stop
 #### Remove Virtual Machine
 ```
 POST /api/vm/{id}/destroy
+```
+
+#### Adjust VM CPU
+```
+POST /api/vm/{id}/set/cpu
+```
+
+```json
+{
+  "cpu": 4
+}
+```
+
+#### Adjust VM Memory
+```
+POST /api/vm/{id}/set/memory
+```
+
+```json
+{
+  "memory": 4096
+}
+```
+
+#### Expand VM Disk
+```
+POST /api/vm/{id}/set/disk
+```
+
+```json
+{
+  "disk": "10G"
+}
+```
+
+#### Migrate VM Node
+```
+POST /api/vm/{id}/set/node
+```
+
+```json
+{
+  "node": "pve2"
+}
+```
+
+**SSE Response**
+```javascript
+data: {"step":"migrating","status":"processing","message":"..."}
+data: {"step":"migrating","status":"success","message":"[+] migration completed"}
 ```
 
 ## Environment Configuration
@@ -131,12 +181,19 @@ NODE_PVE1=10.0.0.2
 NODE_PVE2=10.0.0.3
 NODE_PVE3=10.0.0.4
 
-# IP assignment range
+# IP allocation range and storage specification
 ASSIGN_IP_START=100
 ASSIGN_IP_END=254
+ASSIGN_STORAGE=storage
+
+# VM resource limits
+VM_MAX_CPU=8
+VM_MAX_DISK=32
+VM_MAX_RAM=16384
+VM_BALLOON_MIN=2048
 
 # VM root password
-# Default is 8 spaces (no password)
+# Default is 0123456789 (no password)
 VM_ROOT_PASSWORD=
 ```
 
@@ -156,44 +213,9 @@ sh/
 └── rockylinux_10.sh
 ```
 
-## Usage Examples
-
-### Create Virtual Machine
-```bash
-curl -X POST http://localhost:8080/api/vm/install \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "test-vm",
-    "os": "debian",
-    "version": "12",
-    "cpu": 2,
-    "ram": 2048,
-    "disk": "20G",
-    "passwd": "password123"
-  }'
-```
-
-### Manage Virtual Machine
-```bash
-# Get status
-curl http://localhost:8080/api/vm/101/status
-
-# Start
-curl -X POST http://localhost:8080/api/vm/101/start
-
-# Stop
-curl -X POST http://localhost:8080/api/vm/101/stop
-
-# Reboot
-curl -X POST http://localhost:8080/api/vm/101/reboot
-
-# Destroy
-curl -X POST http://localhost:8080/api/vm/101/destroy
-```
-
 ## License
 
-This source code project is licensed under the [MIT](LICENSE) license.
+This source code project is licensed under the [MIT](LICENSE) License.
 
 ## Author
 
@@ -210,3 +232,4 @@ This source code project is licensed under the [MIT](LICENSE) license.
 ***
 
 ©️ 2025 [邱敬幃 Pardn Chiu](https://pardn.io)
+

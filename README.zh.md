@@ -109,6 +109,56 @@ POST /api/vm/{id}/stop
 POST /api/vm/{id}/destroy
 ```
 
+#### 調整虛擬機 CPU
+```
+POST /api/vm/{id}/set/cpu
+```
+
+```json
+{
+  "cpu": 4
+}
+```
+
+#### 調整虛擬機記憶體
+```
+POST /api/vm/{id}/set/memory
+```
+
+```json
+{
+  "memory": 4096
+}
+```
+
+#### 擴充虛擬機硬碟
+```
+POST /api/vm/{id}/set/disk
+```
+
+```json
+{
+  "disk": "10G"
+}
+```
+
+#### 遷移虛擬機節點
+```
+POST /api/vm/{id}/set/node
+```
+
+```json
+{
+  "node": "pve2"
+}
+```
+
+**SSE 回應**
+```javascript
+data: {"step":"migrating","status":"processing","message":"..."}
+data: {"step":"migrating","status":"success","message":"[+] migration completed"}
+```
+
 ## 環境配置
 
 ### 必要環境變數
@@ -129,12 +179,19 @@ NODE_PVE1=10.0.0.2
 NODE_PVE2=10.0.0.3
 NODE_PVE3=10.0.0.4
 
-# IP 分配範圍
+# IP 分配範圍與指定儲存空間
 ASSIGN_IP_START=100
 ASSIGN_IP_END=254
+ASSIGN_STORAGE=storage
+
+# VM 資源限制
+VM_MAX_CPU=8
+VM_MAX_DISK=32
+VM_MAX_RAM=16384
+VM_BALLOON_MIN=2048
 
 # VM root 密碼
-# 預設為 8 個空格（無密碼）
+# 預設為 0123456789（無密碼）
 VM_ROOT_PASSWORD=
 ```
 
@@ -152,41 +209,6 @@ sh/
 ├── rockylinux_8.sh
 ├── rockylinux_9.sh
 └── rockylinux_10.sh
-```
-
-## 使用範例
-
-### 創建虛擬機
-```bash
-curl -X POST http://localhost:8080/api/vm/install \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "test-vm",
-    "os": "debian",
-    "version": "12",
-    "cpu": 2,
-    "ram": 2048,
-    "disk": "20G",
-    "passwd": "password123"
-  }'
-```
-
-### 管理虛擬機
-```bash
-# 獲取狀態
-curl http://localhost:8080/api/vm/101/status
-
-# 啟動
-curl -X POST http://localhost:8080/api/vm/101/start
-
-# 停止
-curl -X POST http://localhost:8080/api/vm/101/stop
-
-# 重啟
-curl -X POST http://localhost:8080/api/vm/101/reboot
-
-# 銷毀
-curl -X POST http://localhost:8080/api/vm/101/destroy
 ```
 
 ## 授權條款
