@@ -53,3 +53,8 @@ type CloudInit struct {
 	Password         string
 	SSHAuthorizedKey string
 }
+
+type Progress struct {
+	Total     int64
+	Completed int64
+}
