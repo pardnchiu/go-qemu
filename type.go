@@ -37,7 +37,7 @@ type Image struct {
 }
 
 type Folder struct {
-	Main    string
+	VM      string
 	Config  string
 	Log     string
 	PID     string

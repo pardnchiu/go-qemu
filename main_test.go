@@ -15,11 +15,11 @@ func TestNewCloudInit(t *testing.T) {
 	defer os.Unsetenv("TEST_MODE")
 
 	// Setup test folder
-	testFolder := Folder{Main: "./testdata"}
-	if err := os.MkdirAll(testFolder.Main, 0755); err != nil {
+	testFolder := Folder{VM: "./testdata"}
+	if err := os.MkdirAll(testFolder.VM, 0755); err != nil {
 		t.Fatalf("Failed to create test folder: %v", err)
 	}
-	defer os.RemoveAll(testFolder.Main)
+	defer os.RemoveAll(testFolder.VM)
 
 	// Test configuration
 	config := CloudInit{
@@ -43,13 +43,13 @@ func TestNewCloudInit(t *testing.T) {
 	}
 
 	// Verify meta-data file
-	metaDataPath := filepath.Join(testFolder.Main, ".cloudinit-101", "meta-data")
+	metaDataPath := filepath.Join(testFolder.VM, ".cloudinit-101", "meta-data")
 	if _, err := os.Stat(metaDataPath); os.IsNotExist(err) {
 		t.Errorf("Expected meta-data file not found: %s", metaDataPath)
 	}
 
 	// Verify user-data file
-	userDataPath := filepath.Join(testFolder.Main, ".cloudinit-101", "user-data")
+	userDataPath := filepath.Join(testFolder.VM, ".cloudinit-101", "user-data")
 	if _, err := os.Stat(userDataPath); os.IsNotExist(err) {
 		t.Errorf("Expected user-data file not found: %s", userDataPath)
 	}
@@ -225,7 +225,7 @@ func TestGenerateVMDisk(t *testing.T) {
 
 	// Create a Folder struct with the temporary directory as the main directory
 	folder := &Folder{
-		Main: tempDir,
+		VM: tempDir,
 	}
 
 	// Call generateVMDisk
@@ -245,5 +245,37 @@ func TestGenerateVMDisk(t *testing.T) {
 	// Check if the file was resized (this is a basic check, actual resizing depends on qemu-img)
 	if filepath.Ext(targetPath) != ".img" {
 		t.Errorf("Unexpected file extension: %s", filepath.Ext(targetPath))
+	}
+}
+
+func TestNewVMManager(t *testing.T) {
+	// Set up a temporary directory for testing
+	tempDir := t.TempDir()
+	os.Setenv("GO_QEMU_PATH", tempDir)
+	defer os.Unsetenv("GO_QEMU_PATH")
+
+	// Call NewVMManager
+	folder, err := NewQemu()
+	if err != nil {
+		t.Fatalf("NewVMManager failed: %v", err)
+	}
+
+	// Verify that the folder paths are correctly set
+	expectedPaths := []struct {
+		name string
+		path string
+	}{
+		{"VM", folder.VM},
+		{"Config", folder.Config},
+		{"Log", folder.Log},
+		{"PID", folder.PID},
+		{"Monitor", folder.Monitor},
+		{"Image", folder.Image},
+	}
+
+	for _, p := range expectedPaths {
+		if _, err := os.Stat(p.path); os.IsNotExist(err) {
+			t.Errorf("Expected directory %s not found: %s", p.name, p.path)
+		}
 	}
 }

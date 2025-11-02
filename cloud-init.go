@@ -32,7 +32,7 @@ func (m *Folder) NewCloudInit(vmid int, config CloudInit) (string, error) {
 	}
 
 	tmpFolder := fmt.Sprintf(".cloudinit-%d", vmid)
-	tmpFolderPath := filepath.Join(m.Main, tmpFolder)
+	tmpFolderPath := filepath.Join(m.VM, tmpFolder)
 	if err := os.MkdirAll(tmpFolderPath, 0755); err != nil {
 		return "", fmt.Errorf("failed to create temp directory: %w", err)
 	}
@@ -110,7 +110,7 @@ runcmd:
 	}
 
 	ISO := fmt.Sprintf("%d-cloud-init.iso", vmid)
-	ISOPath := filepath.Join(m.Main, ISO)
+	ISOPath := filepath.Join(m.VM, ISO)
 
 	var cmd *exec.Cmd
 	if _, err := exec.LookPath("genisoimage"); err == nil {
@@ -145,6 +145,6 @@ runcmd:
 
 func (m *Folder) RemoveCloudInit(vmid int) {
 	ISO := fmt.Sprintf("%d-cloud-init.iso", vmid)
-	ISOPath := filepath.Join(m.Main, ISO)
+	ISOPath := filepath.Join(m.VM, ISO)
 	os.Remove(ISOPath)
 }

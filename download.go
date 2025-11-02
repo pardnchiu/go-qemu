@@ -19,7 +19,7 @@ func isExists(ary []string, item string) bool {
 	return false
 }
 
-func (m *Folder) getOSImageInfo(osName, version string) (*Image, error) {
+func (f *Folder) getOSImageInfo(osName, version string) (*Image, error) {
 	var (
 		debianVersions = strings.Split(os.Getenv("GO_QEMU_DEBIAN_VERSION"), ",")
 		ubuntuVersions = strings.Split(os.Getenv("GO_QEMU_UBUNTU_VERSION"), ",")
@@ -61,8 +61,8 @@ func (m *Folder) getOSImageInfo(osName, version string) (*Image, error) {
 	return &img, nil
 }
 
-func (m *Folder) downloadOSImage(image *Image) (string, error) {
-	imagePath := filepath.Join(m.Image, image.Filename)
+func (f *Folder) downloadOSImage(image *Image) (string, error) {
+	imagePath := filepath.Join(f.Image, image.Filename)
 	if _, err := os.Stat(imagePath); err == nil {
 		// * image exists
 		return imagePath, nil
@@ -110,11 +110,11 @@ func (m *Folder) downloadOSImage(image *Image) (string, error) {
 		return "", fmt.Errorf("failed to rename file: %w", err)
 	}
 
-	fmt.Printf("[*] filePath: %s\n", imagePath)
+	fmt.Printf("\n[*] filePath: %s\n", imagePath)
 	return imagePath, nil
 }
 
-func (m *Folder) generateVMDisk(vmid int, imagePath, size string) (string, error) {
+func (f *Folder) generateVMDisk(vmid int, imagePath, size string) (string, error) {
 	ext := filepath.Ext(imagePath)
 	if ext == "" {
 		return "", fmt.Errorf("invalid image file")
@@ -122,7 +122,7 @@ func (m *Folder) generateVMDisk(vmid int, imagePath, size string) (string, error
 
 	fmt.Printf("[*] copying image to VM directory\n")
 	target := fmt.Sprintf("%d-0%s", vmid, ext)
-	targetPath := filepath.Join(m.Main, target)
+	targetPath := filepath.Join(f.VM, target)
 	if err := copy(imagePath, targetPath); err != nil {
 		return "", fmt.Errorf("failed to copy: %w", err)
 	}
@@ -131,7 +131,7 @@ func (m *Folder) generateVMDisk(vmid int, imagePath, size string) (string, error
 		return "", fmt.Errorf("disk size is required")
 	}
 
-	fmt.Printf("[*] resizing disk to %s\n", size)
+	fmt.Printf("\n[*] resizing disk to %s\n", size)
 	cmd := exec.Command("qemu-img", "resize", targetPath, size)
 	if err := cmd.Run(); err != nil {
 		return "", fmt.Errorf("failed to resize: %w", err)
@@ -188,10 +188,10 @@ func (d *Progress) Write(progress []byte) (int, error) {
 		completed := float64(d.Completed) / 1024 / 1024
 		total := float64(d.Total) / 1024 / 1024
 
-		fmt.Printf("\r[*] progress: %.2f MB / %.2f MB (%.2f%%)\n", completed, total, percent)
+		fmt.Printf("\r[*] progress: %.2f MB / %.2f MB (%.2f%%)", completed, total, percent)
 	} else {
 		completed := float64(d.Completed) / 1024 / 1024
-		fmt.Printf("\r[*] progress: %.2f MB\n", completed)
+		fmt.Printf("\r[*] progress: %.2f MB", completed)
 	}
 
 	return bytes, nil
