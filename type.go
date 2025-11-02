@@ -4,7 +4,7 @@ import "time"
 
 type Config struct {
 	ID               int    `json:"id"`
-	Name             string `json:"name"`
+	Hostname         string `json:"hostname"`
 	Accelerator      string `json:"accelerator"`
 	Memory           int    `json:"memory"`
 	CPUs             int    `json:"cpus"` // TODO: expand to sockets, cores, threads
@@ -34,4 +34,22 @@ type Image struct {
 	Version  string
 	URL      string
 	Filename string
+}
+
+type Folder struct {
+	Main    string
+	Config  string
+	Log     string
+	PID     string
+	Monitor string
+	Image   string
+}
+
+type CloudInit struct {
+	UUID             string
+	OS               string
+	Hostname         string
+	Username         string
+	Password         string
+	SSHAuthorizedKey string
 }
