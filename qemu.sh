@@ -10,15 +10,13 @@ qemu-system-aarch64 \\
   -drive file=100-cloud-init.iso,format=raw,media=cdrom,readonly=on \\
   -netdev user,id=net0,hostfwd=tcp::22-:22 \\
   -device virtio-net-pci,netdev=net0,mac=[MAC] \\
-  -device usb-tablet \\
-  -device usb-kbd \\
   -device intel-hda \\
   -device hda-duplex \\
   -device qemu-xhci \\
   -rtc base=localtime,clock=host \\
   -vnc 127.0.0.1:0,password=on \\
   -monitor unix:100-monitor.sock,server,nowait \\
-  -serial unix:vm-102-serial.sock,server,nowait \\
+  -serial unix:vm-100-serial.sock,server,nowait \\
   -smbios type=1,uuid=[UUID] \\
   -device virtio-gpu-pci \\
   -display none \\

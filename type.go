@@ -1,4 +1,4 @@
-package main
+package goQemu
 
 import "time"
 
@@ -19,6 +19,7 @@ type Config struct {
 	SSHAuthorizedKey string `json:"ssh_key"`
 	SSHPort          int    `json:"ssh_port"`
 	VNCPort          int    `json:"vnc_port"`
+	UUID             string `json:"uuid"`
 }
 
 type Instance struct {
@@ -34,6 +35,11 @@ type Image struct {
 	Version  string
 	URL      string
 	Filename string
+}
+
+type Qemu struct {
+	Folder Folder
+	Binary string
 }
 
 type Folder struct {

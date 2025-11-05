@@ -1,4 +1,4 @@
-package main
+package goQemu
 
 import (
 	"fmt"
@@ -19,7 +19,7 @@ func isExists(ary []string, item string) bool {
 	return false
 }
 
-func (f *Folder) getOSImageInfo(osName, version string) (*Image, error) {
+func (q *Qemu) getOSImageInfo(osName, version string) (*Image, error) {
 	var (
 		debianVersions = strings.Split(os.Getenv("GO_QEMU_DEBIAN_VERSION"), ",")
 		ubuntuVersions = strings.Split(os.Getenv("GO_QEMU_UBUNTU_VERSION"), ",")
@@ -61,8 +61,8 @@ func (f *Folder) getOSImageInfo(osName, version string) (*Image, error) {
 	return &img, nil
 }
 
-func (f *Folder) downloadOSImage(image *Image) (string, error) {
-	imagePath := filepath.Join(f.Image, image.Filename)
+func (q *Qemu) downloadOSImage(image *Image) (string, error) {
+	imagePath := filepath.Join(q.Folder.Image, image.Filename)
 	if _, err := os.Stat(imagePath); err == nil {
 		// * image exists
 		return imagePath, nil
@@ -114,7 +114,7 @@ func (f *Folder) downloadOSImage(image *Image) (string, error) {
 	return imagePath, nil
 }
 
-func (f *Folder) generateVMDisk(vmid int, imagePath, size string) (string, error) {
+func (q *Qemu) generateVMDisk(vmid int, imagePath, size string) (string, error) {
 	ext := filepath.Ext(imagePath)
 	if ext == "" {
 		return "", fmt.Errorf("invalid image file")
@@ -122,7 +122,7 @@ func (f *Folder) generateVMDisk(vmid int, imagePath, size string) (string, error
 
 	fmt.Printf("[*] copying image to VM directory\n")
 	target := fmt.Sprintf("%d-0%s", vmid, ext)
-	targetPath := filepath.Join(f.VM, target)
+	targetPath := filepath.Join(q.Folder.VM, target)
 	if err := copy(imagePath, targetPath); err != nil {
 		return "", fmt.Errorf("failed to copy: %w", err)
 	}

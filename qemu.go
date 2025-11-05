@@ -1,15 +1,27 @@
-package main
+package goQemu
 
 import (
+	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/user"
 	"path/filepath"
+	"runtime"
+	"syscall"
+
+	"github.com/joho/godotenv"
 )
 
-func NewQemu() (*Folder, error) {
+func NewQemu() (*Qemu, error) {
+	err := godotenv.Load()
+	if err != nil {
+		slog.Info(".env not found, use system env")
+	}
+
 	mainPath := os.Getenv("GO_QEMU_PATH")
 	if mainPath == "" {
+		// * not assigned, use user home
 		usr, err := user.Current()
 		if err != nil {
 			return nil, fmt.Errorf("failed to get user: %w", err)
@@ -54,14 +66,143 @@ func NewQemu() (*Folder, error) {
 		return nil, fmt.Errorf("failed to create folder go-qemu/images: %w", err)
 	}
 
-	folder := &Folder{
-		VM:      vmsPath,
-		Config:  configsPath,
-		Log:     logsPath,
-		PID:     pidsPath,
-		Monitor: monitorsPath,
-		Image:   imagesPath,
+	var binary string
+	switch runtime.GOARCH {
+	case "amd64", "386":
+		binary = "qemu-system-x86_64"
+	case "arm64", "arm":
+		binary = "qemu-system-aarch64"
+	default:
+		return nil, fmt.Errorf("unsupported architecture: %s", runtime.GOARCH)
 	}
 
-	return folder, nil
+	qemu := &Qemu{
+		Folder: Folder{
+			VM:      vmsPath,
+			Config:  configsPath,
+			Log:     logsPath,
+			PID:     pidsPath,
+			Monitor: monitorsPath,
+			Image:   imagesPath,
+		},
+		Binary: binary,
+	}
+
+	return qemu, nil
+}
+
+func (q *Qemu) saveConfig(config Config) error {
+	targetName := fmt.Sprintf("%d.json", config.ID)
+	targetPath := filepath.Join(q.Folder.Config, targetName)
+	data, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(targetPath, data, 0644)
+}
+
+func (q *Qemu) loadConfig(vmid int) (*Config, error) {
+	targetName := fmt.Sprintf("%d.json", vmid)
+	targetPath := filepath.Join(q.Folder.Config, targetName)
+	data, err := os.ReadFile(targetPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var config Config
+	if err := json.Unmarshal(data, &config); err != nil {
+		return nil, err
+	}
+
+	verifyConfig, err := q.verifyConfig(config)
+	if err != nil {
+		return nil, fmt.Errorf("invalid config: %w", err)
+	}
+
+	return verifyConfig, nil
+}
+
+func (q *Qemu) deleteConfig(vmid int) error {
+	targetName := fmt.Sprintf("%d.json", vmid)
+	targetPath := filepath.Join(q.Folder.Config, targetName)
+	return os.Remove(targetPath)
+}
+
+func (q *Qemu) isRunning(pid int) bool {
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		return false
+	}
+
+	err = process.Signal(syscall.Signal(0))
+	return err == nil
+}
+
+func (q *Qemu) Cleanup() error {
+	ids, err := os.ReadDir(q.Folder.Config)
+	if err != nil {
+		return err
+	}
+
+	cleaned := 0
+	for _, entry := range ids {
+		var vmid int
+		if _, err := fmt.Sscanf(entry.Name(), "%d.json", &vmid); err == nil {
+			if pidFilePath, pidData, err := q.getFile(q.Folder.PID, vmid); err == nil {
+				var pid int
+				fmt.Sscanf(pidData, "%d", &pid)
+
+				if !q.isRunning(pid) {
+					os.Remove(pidFilePath)
+					cleaned++
+				}
+			}
+		}
+	}
+
+	fmt.Printf("cleaned up %d unused VM(s)\n", cleaned)
+	return nil
+}
+
+func (q *Qemu) getFile(folderPath string, vmid int) (string, string, error) {
+	var targetName string
+	switch folderPath {
+	case q.Folder.PID:
+		targetName = fmt.Sprintf("%d.pid", vmid)
+	case q.Folder.Monitor:
+		targetName = fmt.Sprintf("%d.sock", vmid)
+	case q.Folder.Config:
+		targetName = fmt.Sprintf("%d.json", vmid)
+	case q.Folder.Log:
+		targetName = fmt.Sprintf("%d.log", vmid)
+	default:
+		return "", "", fmt.Errorf("unsupported folder path: %s", folderPath)
+	}
+
+	targetPath := filepath.Join(folderPath, targetName)
+	if _, err := os.Stat(targetPath); os.IsNotExist(err) {
+		return targetPath, "", fmt.Errorf("file does not exist: %s/%s", targetPath, targetName)
+	}
+
+	content, err := os.ReadFile(targetPath)
+	if err != nil {
+		return targetPath, "", err
+	}
+
+	return targetPath, string(content), nil
+}
+
+func (q *Qemu) diskPathAll(vmid int) ([]string, error) {
+	pattern := fmt.Sprintf("%d-*.{img,qcow2}", vmid)
+	matches, err := filepath.Glob(filepath.Join(q.Folder.VM, pattern))
+	if err != nil {
+		return nil, fmt.Errorf("failed to search for disk files: %w", err)
+	}
+
+	if len(matches) == 0 {
+		return nil, fmt.Errorf("no disk files found for VM %d", vmid)
+	}
+
+	return matches, nil
 }

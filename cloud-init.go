@@ -1,4 +1,4 @@
-package main
+package goQemu
 
 import (
 	"fmt"
@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-func (m *Folder) NewCloudInit(vmid int, config CloudInit) (string, error) {
+func (q *Qemu) generateCloudInit(vmid int, config CloudInit) (string, error) {
 	if config.UUID == "" {
 		return "", fmt.Errorf("UUID is required for cloud-init")
 	} else if !map[string]bool{
@@ -32,7 +32,7 @@ func (m *Folder) NewCloudInit(vmid int, config CloudInit) (string, error) {
 	}
 
 	tmpFolder := fmt.Sprintf(".cloudinit-%d", vmid)
-	tmpFolderPath := filepath.Join(m.VM, tmpFolder)
+	tmpFolderPath := filepath.Join(q.Folder.VM, tmpFolder)
 	if err := os.MkdirAll(tmpFolderPath, 0755); err != nil {
 		return "", fmt.Errorf("failed to create temp directory: %w", err)
 	}
@@ -86,7 +86,7 @@ local-hostname: %s
 		}
 	}
 
-	userData := fmt.Sprintf(`
+	userData := fmt.Sprintf(`#cloud-config
 users:
   - name: %s
     sudo: ALL=(ALL) NOPASSWD:ALL
@@ -94,7 +94,7 @@ users:
       - %s
     shell: /bin/bash
 
-ssh_pwauth: false
+ssh_pwauth: true
 
 chpasswd:
   list: |
@@ -110,7 +110,7 @@ runcmd:
 	}
 
 	ISO := fmt.Sprintf("%d-cloud-init.iso", vmid)
-	ISOPath := filepath.Join(m.VM, ISO)
+	ISOPath := filepath.Join(q.Folder.VM, ISO)
 
 	var cmd *exec.Cmd
 	if _, err := exec.LookPath("genisoimage"); err == nil {
@@ -139,12 +139,12 @@ runcmd:
 		return "", fmt.Errorf("failed to create cloud-init ISO: %w", err)
 	}
 
-	fmt.Printf("successfully created cloud-init ISO: %s\n", ISOPath)
+	fmt.Printf("[*] created cloud-init ISO: %s\n", ISOPath)
 	return ISOPath, nil
 }
 
-func (m *Folder) RemoveCloudInit(vmid int) {
+func (q *Qemu) removeCloudInit(vmid int) {
 	ISO := fmt.Sprintf("%d-cloud-init.iso", vmid)
-	ISOPath := filepath.Join(m.VM, ISO)
+	ISOPath := filepath.Join(q.Folder.VM, ISO)
 	os.Remove(ISOPath)
 }
