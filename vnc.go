@@ -14,36 +14,92 @@ import (
 func (q *Qemu) OpenVNC(vmid int) error {
 	config, err := q.loadConfig(vmid)
 	if err != nil {
-		return fmt.Errorf("failed to get VM %d config: %w", vmid, err)
+		return fmt.Errorf("failed to get VM (%d): %w", vmid, err)
 	}
 
 	if config.VNCPort == 0 {
-		return fmt.Errorf("VNC is not enabled for VM %d", vmid)
-	}
-
-	pidFile := filepath.Join(q.Folder.PID, fmt.Sprintf("%d.pid", vmid))
-	pidData, err := os.ReadFile(pidFile)
-	if err != nil {
-		return fmt.Errorf("VM %d is not running", vmid)
+		return fmt.Errorf("VM (%d) is not enabled", vmid)
 	}
 
 	var pid int
-	fmt.Sscanf(string(pidData), "%d", &pid)
-	if !q.isRunning(pid) {
-		return fmt.Errorf("VM %d is not running", vmid)
+	if _, data, err := q.getFile(q.Folder.PID, vmid); err == nil {
+		fmt.Sscanf(data, "%d", &pid)
+		if !q.isRunning(pid) {
+			return fmt.Errorf("VM (%d) is not running", vmid)
+		}
+	} else {
+		return fmt.Errorf("VM (%d) is not running", vmid)
 	}
 
-	vncURL := fmt.Sprintf("vnc://localhost:%d", config.VNCPort)
-	fmt.Printf("connection to VM vnc %d on port %d...\n", vmid, config.VNCPort)
-
-	cmd := exec.Command("open", vncURL)
-	if err := cmd.Start(); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to open VNC viewer: %v\n", err)
-		return nil
+	ip, err := q.getHostIP()
+	if err != nil {
+		ip = "localhost"
 	}
 
-	fmt.Printf("VNC viewer opened. Connect to: %s\n", vncURL)
+	fmt.Printf("vnc://%s:%d\n", ip, config.VNCPort)
+
 	return nil
+}
+
+func (q *Qemu) getHostIP() (string, error) {
+	cmd := exec.Command("ip", "addr", "show", "vmbr0")
+	output, err := cmd.Output()
+	if err == nil {
+		/*
+					3: vmbr0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default qlen 1000
+			    link/ether ae:68:b4:7e:23:cd brd ff:ff:ff:ff:ff:ff
+			    inet 10.7.22.180/24 scope global vmbr0
+			       valid_lft forever preferred_lft forever
+			    inet6 fe80::ac68:b4ff:fe7e:23cd/64 scope link
+			       valid_lft forever preferred_lft forever
+		*/
+		lines := strings.Split(string(output), "\n")
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "inet ") {
+				// inet 10.7.22.180/24 scope global vmbr0
+				parts := strings.Fields(line)
+				if len(parts) >= 2 {
+					ipCIDR := parts[1]
+					ip := strings.Split(ipCIDR, "/")[0]
+					return ip, nil
+				}
+			}
+		}
+	}
+
+	cmd = exec.Command("ip", "route", "get", "1.1.1.1")
+	output, err = cmd.Output()
+	if err == nil {
+		/*
+					1.1.1.1 via 10.7.22.1 dev vmbr0 src 10.7.22.180 uid 1000
+			    cache
+		*/
+		lines := strings.Split(string(output), "\n")
+		for _, line := range lines {
+			if strings.Contains(line, "src") {
+				parts := strings.Fields(line)
+				for i, part := range parts {
+					if part == "src" && i+1 < len(parts) {
+						return parts[i+1], nil
+					}
+				}
+			}
+		}
+	}
+
+	cmd = exec.Command("hostname", "-I")
+	output, err = cmd.Output()
+	if err == nil {
+		ips := strings.Fields(string(output))
+		for _, ip := range ips {
+			if !strings.HasPrefix(ip, "127.") && strings.Count(ip, ".") == 3 {
+				return ip, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("could not determine host IP")
 }
 
 func (q *Qemu) setVNCPassword(vmid int, password string) error {

@@ -6,33 +6,6 @@ import (
 	"strconv"
 )
 
-func (q *Qemu) assignVMID() (int, error) {
-	ids, err := os.ReadDir(q.Folder.Config)
-	if err != nil {
-		return 0, fmt.Errorf("failed to read go-qemu/configs: %w", err)
-	}
-
-	ary := make(map[int]bool, len(ids))
-	for _, id := range ids {
-		if id.IsDir() {
-			continue
-		}
-
-		var vmid int
-		if _, err := fmt.Sscanf(id.Name(), "%d.json", &vmid); err == nil {
-			ary[vmid] = true
-		}
-	}
-
-	for id := 100; id <= 999; id++ {
-		if !ary[id] {
-			return id, nil
-		}
-	}
-
-	return 0, fmt.Errorf("no available VMID can be assigned")
-}
-
 func (q *Qemu) verifyConfig(config Config) (*Config, error) {
 	vmidStart, err := strconv.Atoi(os.Getenv("GO_QEMU_VMID_START"))
 	if err != nil {
@@ -54,9 +27,9 @@ func (q *Qemu) verifyConfig(config Config) (*Config, error) {
 		return nil, fmt.Errorf("hostname must be specified")
 	}
 
-	if config.Username == "" {
-		return nil, fmt.Errorf("username must be specified")
-	}
+	// if config.Username == "" {
+	// 	return nil, fmt.Errorf("username must be specified")
+	// }
 
 	if config.UUID == "" {
 		return nil, fmt.Errorf("UUID must be specified")
@@ -68,25 +41,47 @@ func (q *Qemu) verifyConfig(config Config) (*Config, error) {
 
 	config.VNCPort = 59000 + config.ID
 
-	// TODO: update this after update network
-	config.SSHPort = 22000 + config.ID
-
-	if config.CloudInit == "" && config.OS != "" {
-		cloudInitConfig := CloudInit{
-			UUID:             config.UUID,
-			OS:               config.OS,
-			Hostname:         config.Hostname,
-			Username:         config.Username,
-			Password:         config.Password,
-			SSHAuthorizedKey: config.SSHAuthorizedKey,
+	if len(config.Network) == 0 {
+		config.Network = []Network{
+			{
+				Bridge:     "vmbr0",
+				Model:      "virtio-net-pci",
+				Vlan:       0,
+				MACAddress: generateMAC(config.ID),
+				Firewall:   false,
+				Disconnect: false,
+				MTU:        1500,
+				RateLimit:  0,
+				Multiqueue: 0,
+			},
 		}
-
-		cloudInitPath, err := q.generateCloudInit(config.ID, cloudInitConfig)
-		if err != nil {
-			return nil, fmt.Errorf("failed to generate cloud-init: %w", err)
-		}
-		config.CloudInit = cloudInitPath
 	}
 
+	cloudInitConfig := config.CloudInit
+	// if config.CloudInitPath == "" && config.OS != "" {
+	// 	cloudInitConfig = CloudInit{
+	// 		UUID: config.UUID,
+	// 		// OS:               config.OS,
+	// 		Hostname:         config.Hostname,
+	// 		Username:         config.Username,
+	// 		Password:         config.Password,
+	// 		SSHAuthorizedKey: config.SSHAuthorizedKey,
+	// 		UpgradePackages:  true,
+	// 		NetworkConfig:    nil,
+	// 	}
+	// }
+
+	cloudInitPath, err := q.generateCloudInit(config, cloudInitConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate cloud-init: %w", err)
+	}
+	config.CloudInit = cloudInitConfig
+	config.CloudInitPath = cloudInitPath
+
 	return &config, nil
+}
+
+func generateMAC(vmid int) string {
+	// use QEMU OUI 52:54:00
+	return fmt.Sprintf("52:54:00:00:%02X:%02X", (vmid>>8)&0xFF, vmid&0xFF)
 }

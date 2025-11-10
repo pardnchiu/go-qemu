@@ -105,7 +105,7 @@ func (q *Qemu) runVM(config *Config, vmid int) (int, error) {
 	}
 
 	time.Sleep(1 * time.Second)
-	if err := q.setVNCPassword(vmid, config.Password); err != nil {
+	if err := q.setVNCPassword(vmid, config.CloudInit.Password); err != nil {
 		slog.Warn("failed to set VNC password", "error", err)
 	}
 

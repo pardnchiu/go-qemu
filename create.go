@@ -3,13 +3,15 @@ package goQemu
 import (
 	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"runtime"
 
 	"github.com/google/uuid"
 )
 
-func (q *Qemu) Create(config Config) error {
+// TODO: append ssh string for cloud-init config
+func (q *Qemu) Create(config Config, ssh string) error {
 	q.Cleanup()
 
 	config.UUID = uuid.New().String()
@@ -59,10 +61,28 @@ func (q *Qemu) Create(config Config) error {
 		return fmt.Errorf("either disk_path or (os and version) must be specified")
 	}
 
-	config.Username = config.OS
-
+	username := config.OS
 	if config.OS == "rockylinux" {
-		config.Username = "rocky"
+		username = "rocky"
+	}
+
+	passwd := "passwd"
+
+	if config.CloudInit.UUID == "" {
+		config.CloudInit = CloudInit{
+			UUID:            config.UUID,
+			Hostname:        config.Hostname,
+			Username:        username,
+			Password:        passwd,
+			AuthorizedKey:   ssh,
+			UpgradePackages: true,
+			IPv4: &IPConfig{
+				Mode: "dhcp",
+			},
+			IPv6: &IPConfig{
+				Mode: "dhcp",
+			},
+		}
 	}
 
 	verifyConfig, err := q.verifyConfig(config)
@@ -109,14 +129,14 @@ func (q *Qemu) verifyArgs(config Config) []string {
 		"-device", "intel-hda",
 		"-device", "hda-duplex,audiodev=audio0",
 		"-drive", fmt.Sprintf("file=%s,format=qcow2,if=virtio", config.DiskPath),
-		"-drive", fmt.Sprintf("file=%s,format=raw,media=cdrom,readonly=on", config.CloudInit),
+		"-drive", fmt.Sprintf("file=%s,format=raw,media=cdrom,readonly=on", config.CloudInitPath),
 		"-rtc", "base=utc,clock=host",
 		"-vnc", fmt.Sprintf("0.0.0.0:%d,password=on", vncDisplay),
 		"-monitor", fmt.Sprintf("unix:%s,server,nowait", monitorPath),
 		// "-chardev", fmt.Sprintf("socket,id=mon0,path=%s,server=on,wait=off", monitorPath),
 		// "-mon", "chardev=mon0,mode=control",
-		"-netdev", fmt.Sprintf("user,id=net0,hostfwd=tcp::%d-:22", config.SSHPort),
-		"-device", "virtio-net-pci,netdev=net0",
+		// "-netdev", fmt.Sprintf("user,id=net0,hostfwd=tcp::%d-:22", config.SSHPort),
+		// "-device", "virtio-net-pci,netdev=net0",
 
 		"-smbios", fmt.Sprintf("type=1,uuid=%s", config.UUID),
 		"-device", "virtio-gpu-pci",
@@ -126,7 +146,57 @@ func (q *Qemu) verifyArgs(config Config) []string {
 		// "-serial", "null", // Disable serial console
 	}
 
+	for i, net := range config.Network {
+		if net.Disconnect {
+			continue
+		}
+
+		netdevID := fmt.Sprintf("net%d", i)
+
+		netdevArgs := fmt.Sprintf("bridge,id=%s,br=%s", netdevID, net.Bridge)
+		args = append(args, "-netdev", netdevArgs)
+
+		deviceArgs := fmt.Sprintf("%s,netdev=%s", net.Model, netdevID)
+
+		if net.MACAddress != "" {
+			deviceArgs += fmt.Sprintf(",mac=%s", net.MACAddress)
+		}
+
+		if net.Multiqueue > 0 {
+			deviceArgs += fmt.Sprintf(",mq=on,vectors=%d", net.Multiqueue*2+2)
+		}
+
+		args = append(args, "-device", deviceArgs)
+	}
+
 	slog.Info("config", "arg", args)
 
 	return args
+}
+
+func (q *Qemu) assignVMID() (int, error) {
+	ids, err := os.ReadDir(q.Folder.Config)
+	if err != nil {
+		return 0, fmt.Errorf("failed to read go-qemu/configs: %w", err)
+	}
+
+	ary := make(map[int]bool, len(ids))
+	for _, id := range ids {
+		if id.IsDir() {
+			continue
+		}
+
+		var vmid int
+		if _, err := fmt.Sscanf(id.Name(), "%d.json", &vmid); err == nil {
+			ary[vmid] = true
+		}
+	}
+
+	for id := 100; id <= 999; id++ {
+		if !ary[id] {
+			return id, nil
+		}
+	}
+
+	return 0, fmt.Errorf("no available VMID can be assigned")
 }
