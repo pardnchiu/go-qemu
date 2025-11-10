@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -29,6 +30,13 @@ func (q *Qemu) getOSImageInfo(osName, version string) (*Image, error) {
 	img.OS = osName
 	img.Version = version
 
+	arch := runtime.GOARCH
+	switch arch {
+	case "amd64", "arm64":
+	default:
+		return nil, fmt.Errorf("unsupported architecture: %s", arch)
+	}
+
 	switch osName {
 	case "debian":
 		versionNames := map[string]string{
@@ -40,20 +48,26 @@ func (q *Qemu) getOSImageInfo(osName, version string) (*Image, error) {
 			return nil, fmt.Errorf("unsupported version: Debian %s", version)
 		}
 		versionName := versionNames[version]
-		img.URL = fmt.Sprintf("https://cloud.debian.org/images/cloud/%s/latest/debian-%s-generic-arm64.qcow2", versionName, version)
-		img.Filename = fmt.Sprintf("debian-%s-generic-arm64.qcow2", version)
+		img.URL = fmt.Sprintf("https://cloud.debian.org/images/cloud/%s/latest/debian-%s-generic-%s.qcow2", versionName, version, arch)
+		img.Filename = fmt.Sprintf("debian-%s-generic-%s.qcow2", version, arch)
 	case "ubuntu":
 		if !isExists(ubuntuVersions, version) {
 			return nil, fmt.Errorf("unsupported version: Ubuntu %s", version)
 		}
-		img.URL = fmt.Sprintf("https://cloud-images.ubuntu.com/releases/%s/release/ubuntu-%s-server-cloudimg-arm64.img", version, version)
-		img.Filename = fmt.Sprintf("ubuntu-%s-server-cloudimg-arm64.img", version)
+		img.URL = fmt.Sprintf("https://cloud-images.ubuntu.com/releases/%s/release/ubuntu-%s-server-cloudimg-%s.img", version, version, arch)
+		img.Filename = fmt.Sprintf("ubuntu-%s-server-cloudimg-%s.img", version, arch)
 	case "rockylinux":
+		switch arch {
+		case "arm64":
+			arch = "aarch64"
+		case "amd64":
+			arch = "x86_64"
+		}
 		if !isExists(rockyVersions, version) {
 			return nil, fmt.Errorf("unsupported version: RockyLinux %s", version)
 		}
-		img.URL = fmt.Sprintf("https://dl.rockylinux.org/pub/rocky/%s/images/aarch64/Rocky-%s-GenericCloud-Base.latest.aarch64.qcow2", version, version)
-		img.Filename = fmt.Sprintf("Rocky-%s-GenericCloud-Base.latest.aarch64.qcow2", version)
+		img.URL = fmt.Sprintf("https://dl.rockylinux.org/pub/rocky/%s/images/aarch64/Rocky-%s-GenericCloud-Base.latest.%s.qcow2", version, version, arch)
+		img.Filename = fmt.Sprintf("Rocky-%s-GenericCloud-Base.latest.%s.qcow2", version, arch)
 	default:
 		return nil, fmt.Errorf("unsupported OS: %s", osName)
 	}

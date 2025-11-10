@@ -1,4 +1,7 @@
 .env
 .DS_Store
 .vscode
+main.go
+Makefile
 go-qemu
+memo.md

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
+	"runtime"
 
 	"github.com/google/uuid"
 )
@@ -86,12 +87,20 @@ func (q *Qemu) verifyArgs(config Config) []string {
 	vncDisplay := config.VNCPort - 5900
 	monitorPath := filepath.Join(q.Folder.Monitor, fmt.Sprintf("%d.sock", config.ID))
 
+	machineType := runtime.GOARCH
+	switch runtime.GOARCH {
+	case "arm64", "arm":
+		machineType = "virt"
+	default:
+		machineType = "pc"
+	}
+
 	args := []string{
 		"-accel", config.Accelerator,
 		"-m", fmt.Sprintf("%d", config.Memory),
 		"-smp", fmt.Sprintf("%d,sockets=%d,cores=%d,threads=1", config.CPUs, 1, config.CPUs),
 		"-cpu", "host",
-		"-M", "virt",
+		"-M", machineType,
 		"-bios", config.BIOSPath,
 		"-device", "qemu-xhci",
 		"-device", "usb-kbd",
@@ -102,7 +111,7 @@ func (q *Qemu) verifyArgs(config Config) []string {
 		"-drive", fmt.Sprintf("file=%s,format=qcow2,if=virtio", config.DiskPath),
 		"-drive", fmt.Sprintf("file=%s,format=raw,media=cdrom,readonly=on", config.CloudInit),
 		"-rtc", "base=utc,clock=host",
-		"-vnc", fmt.Sprintf("127.0.0.1:%d,password=on", vncDisplay),
+		"-vnc", fmt.Sprintf("0.0.0.0:%d,password=on", vncDisplay),
 		"-monitor", fmt.Sprintf("unix:%s,server,nowait", monitorPath),
 		// "-chardev", fmt.Sprintf("socket,id=mon0,path=%s,server=on,wait=off", monitorPath),
 		// "-mon", "chardev=mon0,mode=control",

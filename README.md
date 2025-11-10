@@ -1,5 +1,12 @@
 # Go QEMU
+> [!NOTE]
+> Remove mac Focus on Debian/Ubuntu OS to feature fulfillment
 
-## packages dependence
-- qemu
+## Package Dependencies
+- qemu-system
 - genisoimage/mkisofs
+
+## Setup Requirements for Sudo Actions
+```bash
+sudo usermod -aG kvm [user]
+```

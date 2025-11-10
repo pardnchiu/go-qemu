@@ -161,7 +161,7 @@ func (q *Qemu) Cleanup() error {
 		}
 	}
 
-	fmt.Printf("cleaned up %d unused VM(s)\n", cleaned)
+	fmt.Printf("[*] cleaned up %d unused VM(s)\n", cleaned)
 	return nil
 }
 
@@ -194,10 +194,18 @@ func (q *Qemu) getFile(folderPath string, vmid int) (string, string, error) {
 }
 
 func (q *Qemu) diskPathAll(vmid int) ([]string, error) {
-	pattern := fmt.Sprintf("%d-*.{img,qcow2}", vmid)
-	matches, err := filepath.Glob(filepath.Join(q.Folder.VM, pattern))
-	if err != nil {
-		return nil, fmt.Errorf("failed to search for disk files: %w", err)
+	extensions := []string{"img", "qcow2"}
+	var matches []string
+
+	for _, ext := range extensions {
+		pattern := fmt.Sprintf("%d-*.%s", vmid, ext)
+		path := filepath.Join(q.Folder.VM, pattern)
+		files, err := filepath.Glob(path)
+		if err != nil {
+			return nil, fmt.Errorf("failed to search for disk files: %w", err)
+		}
+
+		matches = append(matches, files...)
 	}
 
 	if len(matches) == 0 {

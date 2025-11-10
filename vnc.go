@@ -2,10 +2,12 @@ package goQemu
 
 import (
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -61,15 +63,41 @@ func (q *Qemu) setVNCPassword(vmid int, password string) error {
 	}
 	// defer conn.Close()
 
-	buf := make([]byte, 1024)
-	conn.Read(buf)
+	buf := make([]byte, 4096)
+	_, err = conn.Read(buf)
+	if err != nil {
+		return fmt.Errorf("failed to read from monitor: %w", err)
+	}
+
+	time.Sleep(500 * time.Millisecond)
 
 	cmd := fmt.Sprintf("change vnc password %s\n", password)
 	if _, err := conn.Write([]byte(cmd)); err != nil {
 		return fmt.Errorf("failed to set password: %w", err)
 	}
 
-	conn.Read(buf)
+	response := ""
+	for {
+		n, err := conn.Read(buf)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return fmt.Errorf("failed to read monitor response: %w", err)
+		}
+		response += string(buf[:n])
+		if strings.Contains(response, "(qemu)") {
+			break
+		}
+	}
+
+	if !isSuccess(response) {
+		return fmt.Errorf("failed to set VNC password, monitor response: %s", response)
+	}
 
 	return nil
+}
+
+func isSuccess(resp string) bool {
+	return !(strings.Contains(resp, "error") || strings.Contains(resp, "failed"))
 }

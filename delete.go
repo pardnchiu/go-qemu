@@ -1,7 +1,7 @@
 package goQemu
 
 import (
-	"fmt"
+	"log/slog"
 	"os"
 	"time"
 )
@@ -9,7 +9,7 @@ import (
 func (q *Qemu) Delete(vmid int) error {
 	_, err := q.loadConfig(vmid)
 	if err != nil {
-		return fmt.Errorf("failed to get VM %d config: %w", vmid, err)
+		slog.Error("Failed to get VM config", "vmid", vmid, "error", err)
 	}
 
 	if pidFilePath, _, err := q.getFile(q.Folder.PID, vmid); err == nil {
@@ -23,6 +23,7 @@ func (q *Qemu) Delete(vmid int) error {
 
 	if diskPaths, err := q.diskPathAll(vmid); err == nil {
 		for _, path := range diskPaths {
+			slog.Info("Deleting disk file", "vmid", vmid, "path", path)
 			os.Remove(path)
 		}
 		q.removeCloudInit(vmid)

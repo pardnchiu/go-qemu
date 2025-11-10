@@ -101,6 +101,8 @@ chpasswd:
     %s:%s
   expire: false
 
+package_upgrade: true
+
 runcmd:
   - [ sh, -c, '(sleep 3 && rm -rf /var/lib/cloud/instance /var/lib/cloud/instances/*) &' ]
 `, config.Username, sshKey, config.Username, config.Password)
