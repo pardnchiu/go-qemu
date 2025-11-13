@@ -9,14 +9,16 @@ import (
 )
 
 func (q *Qemu) generateCloudInit(config Config, cloudInit CloudInit) (string, error) {
-	if cloudInit.UUID == "" {
+	if config.Options.UUID == "" {
 		return "", fmt.Errorf("UUID is required for cloud-init")
 	}
 
 	if !map[string]bool{
 		"ubuntu":     true,
 		"debian":     true,
+		"centos":     true,
 		"rockylinux": true,
+		"almalinux":  true,
 	}[strings.ToLower(config.OS)] {
 		return "", fmt.Errorf("unsupported OS: %s", config.OS)
 	}
@@ -46,7 +48,7 @@ func (q *Qemu) generateCloudInit(config Config, cloudInit CloudInit) (string, er
 	metaData := fmt.Sprintf(`
 instance-id: %s
 local-hostname: %s
-`, cloudInit.UUID, cloudInit.Hostname)
+`, config.Options.UUID, cloudInit.Hostname)
 	metaDataPath := filepath.Join(tmpFolderPath, "meta-data")
 	if err := os.WriteFile(metaDataPath, []byte(metaData), 0644); err != nil {
 		return "", fmt.Errorf("failed to write meta-data: %w", err)
@@ -109,6 +111,9 @@ chpasswd:
   expire: false
 
 package_upgrade: %s
+
+packages:
+  - qemu-guest-agent
 `, cloudInit.Username, sshKey, cloudInit.Username, cloudInit.Password, upgradePackages)
 
 	// if cloudInit.NetworkConfig != nil {
@@ -122,6 +127,8 @@ package_upgrade: %s
 runcmd:
   - [ sh, -c, 'ping -c 3 $(ip route | grep default | awk "{print \$3}") >/dev/null 2>&1 &' ]
   - [ sh, -c, '(sleep 3 && rm -rf /var/lib/cloud/instance /var/lib/cloud/instances/*) &' ]
+  - [ systemctl, enable, qemu-guest-agent ]
+  - [ systemctl, start, qemu-guest-agent ]
 `
 
 	userDataPath := filepath.Join(tmpFolderPath, "user-data")

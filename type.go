@@ -8,7 +8,7 @@ type Config struct {
 	Accelerator   string `json:"accelerator"`
 	Memory        int    `json:"memory"`
 	CPUs          int    `json:"cpus"` // TODO: expand to sockets, cores, threads
-	BIOSPath      string `json:"bios_path"`
+	BIOS          string `json:"bios"`
 	DiskPath      string `json:"disk_path"`
 	DiskSize      string `json:"disk_size"`
 	CloudInitPath string `json:"cloud_init_path"`
@@ -17,10 +17,11 @@ type Config struct {
 	// Username         string    `json:"username"`
 	// Password         string    `json:"password"`
 	// SSHAuthorizedKey string    `json:"ssh_key"`
-	VNCPort   int       `json:"vnc_port"`
-	UUID      string    `json:"uuid"`
+	VNCPort int `json:"vnc_port"`
+	// UUID      string    `json:"uuid"`
 	Network   []Network `json:"network"`
 	CloudInit CloudInit `json:"cloud_init"`
+	Options   Options   `json:"options"`
 }
 
 type Network struct {
@@ -44,7 +45,6 @@ type IPConfig struct {
 }
 
 type CloudInit struct {
-	UUID string `json:"uuid"`
 	// OS               string         `json:"os"`
 	Hostname        string    `json:"hostname"`
 	Username        string    `json:"username"`
@@ -56,6 +56,10 @@ type CloudInit struct {
 	IPv4            *IPConfig `json:"ipv4"`
 	IPv6            *IPConfig `json:"ipv6"`
 	// NetworkConfig   *NetworkConfig `json:"network_config,omitempty"`
+}
+
+type Options struct {
+	UUID string `json:"uuid"`
 }
 
 // type NetworkConfig struct {

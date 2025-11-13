@@ -31,13 +31,22 @@ func (q *Qemu) verifyConfig(config Config) (*Config, error) {
 	// 	return nil, fmt.Errorf("username must be specified")
 	// }
 
-	if config.UUID == "" {
+	if config.Options.UUID == "" {
 		return nil, fmt.Errorf("UUID must be specified")
 	}
 
 	if config.DiskPath == "" {
 		return nil, fmt.Errorf("disk_path must be specified")
 	}
+
+	// if config.BIOSPath == "" {
+	// 	switch runtime.GOOS {
+	// 	case "darwin":
+	// 		config.BIOSPath = "/opt/homebrew/share/qemu/edk2-aarch64-code.fd"
+	// 	default:
+	// 		config.BIOSPath = "/usr/share/seabios/bios.bin"
+	// 	}
+	// }
 
 	config.VNCPort = 59000 + config.ID
 

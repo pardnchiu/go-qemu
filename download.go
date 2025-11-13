@@ -24,7 +24,9 @@ func (q *Qemu) getOSImageInfo(osName, version string) (*Image, error) {
 	var (
 		debianVersions = strings.Split(os.Getenv("GO_QEMU_DEBIAN_VERSION"), ",")
 		ubuntuVersions = strings.Split(os.Getenv("GO_QEMU_UBUNTU_VERSION"), ",")
+		centosVersions = strings.Split(os.Getenv("GO_QEMU_CENTOS_VERSION"), ",")
 		rockyVersions  = strings.Split(os.Getenv("GO_QEMU_ROCKYLINUX_VERSION"), ",")
+		almaVersions   = strings.Split(os.Getenv("GO_QEMU_ALMALINUX_VERSION"), ",")
 		img            Image
 	)
 	img.OS = osName
@@ -56,6 +58,18 @@ func (q *Qemu) getOSImageInfo(osName, version string) (*Image, error) {
 		}
 		img.URL = fmt.Sprintf("https://cloud-images.ubuntu.com/releases/%s/release/ubuntu-%s-server-cloudimg-%s.img", version, version, arch)
 		img.Filename = fmt.Sprintf("ubuntu-%s-server-cloudimg-%s.img", version, arch)
+	case "centos":
+		switch arch {
+		case "arm64":
+			arch = "aarch64"
+		case "amd64":
+			arch = "x86_64"
+		}
+		if !isExists(centosVersions, version) {
+			return nil, fmt.Errorf("unsupported version: CentOS %s", version)
+		}
+		img.URL = fmt.Sprintf("https://cloud.centos.org/centos/%s-stream/%s/images/CentOS-Stream-GenericCloud-%s-latest.%s.qcow2", version, arch, version, arch)
+		img.Filename = fmt.Sprintf("CentOS-Stream-GenericCloud-%s-latest.%s.qcow2", version, arch)
 	case "rockylinux":
 		switch arch {
 		case "arm64":
@@ -66,8 +80,20 @@ func (q *Qemu) getOSImageInfo(osName, version string) (*Image, error) {
 		if !isExists(rockyVersions, version) {
 			return nil, fmt.Errorf("unsupported version: RockyLinux %s", version)
 		}
-		img.URL = fmt.Sprintf("https://dl.rockylinux.org/pub/rocky/%s/images/aarch64/Rocky-%s-GenericCloud-Base.latest.%s.qcow2", version, version, arch)
+		img.URL = fmt.Sprintf("https://dl.rockylinux.org/pub/rocky/%s/images/%s/Rocky-%s-GenericCloud-Base.latest.%s.qcow2", version, arch, version, arch)
 		img.Filename = fmt.Sprintf("Rocky-%s-GenericCloud-Base.latest.%s.qcow2", version, arch)
+	case "almalinux":
+		switch arch {
+		case "arm64":
+			arch = "aarch64"
+		case "amd64":
+			arch = "x86_64"
+		}
+		if !isExists(almaVersions, version) {
+			return nil, fmt.Errorf("unsupported version: AlmaLinux %s", version)
+		}
+		img.URL = fmt.Sprintf("https://repo.almalinux.org/almalinux/%s/cloud/%s/images/AlmaLinux-%s-GenericCloud-latest.%s.qcow2", version, arch, version, arch)
+		img.Filename = fmt.Sprintf("AlmaLinux-%s-GenericCloud-latest.%s.qcow2", version, arch)
 	default:
 		return nil, fmt.Errorf("unsupported OS: %s", osName)
 	}

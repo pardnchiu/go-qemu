@@ -44,3 +44,10 @@ iface vmbr0 inet static
   bridge_fd 0
   bridge_maxwait 0
 ```
+
+### Default username
+- Debian `debian` 
+- Ubuntu `ubuntu`
+- CentOS-Stream `centos`
+- RockyLinux `rocky`
+- AlmaLinux `alma`

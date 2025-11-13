@@ -14,8 +14,6 @@ import (
 func (q *Qemu) Create(config Config, ssh string) error {
 	q.Cleanup()
 
-	config.UUID = uuid.New().String()
-
 	// assign VMID if not provided
 	if config.ID == 0 {
 		vmid, err := q.assignVMID()
@@ -64,13 +62,18 @@ func (q *Qemu) Create(config Config, ssh string) error {
 	username := config.OS
 	if config.OS == "rockylinux" {
 		username = "rocky"
+	} else if config.OS == "almalinux" {
+		username = "alma"
 	}
 
 	passwd := "passwd"
 
-	if config.CloudInit.UUID == "" {
+	if config.Options.UUID == "" {
+		config.Options = Options{
+			UUID: uuid.New().String(),
+		}
+
 		config.CloudInit = CloudInit{
-			UUID:            config.UUID,
 			Hostname:        config.Hostname,
 			Username:        username,
 			Password:        passwd,
@@ -115,13 +118,34 @@ func (q *Qemu) verifyArgs(config Config) []string {
 		machineType = "pc"
 	}
 
+	// seabios / ovmf(uefi)
+	biosPath := "/usr/share/seabios/bios.bin"
+	if config.BIOS == "ovmf" || config.BIOS == "OVMF" {
+		for _, e := range []string{
+			"/usr/share/OVMF/OVMF_CODE.fd",
+			"/usr/share/OVMF/OVMF.fd",
+			"/usr/share/ovmf/OVMF_CODE.fd",
+			"/usr/share/ovmf/OVMF.fd",
+		} {
+			if _, err := os.Stat(e); err == nil {
+				biosPath = e
+				break
+			}
+		}
+	}
+
+	// * for apple silicon
+	if runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" {
+		biosPath = "/opt/homebrew/share/qemu/edk2-aarch64-code.fd"
+	}
+
 	args := []string{
 		"-accel", config.Accelerator,
 		"-m", fmt.Sprintf("%d", config.Memory),
 		"-smp", fmt.Sprintf("%d,sockets=%d,cores=%d,threads=1", config.CPUs, 1, config.CPUs),
 		"-cpu", "host",
 		"-M", machineType,
-		"-bios", config.BIOSPath,
+		"-bios", biosPath,
 		"-device", "qemu-xhci",
 		"-device", "usb-kbd",
 		"-device", "usb-tablet",
@@ -138,7 +162,7 @@ func (q *Qemu) verifyArgs(config Config) []string {
 		// "-netdev", fmt.Sprintf("user,id=net0,hostfwd=tcp::%d-:22", config.SSHPort),
 		// "-device", "virtio-net-pci,netdev=net0",
 
-		"-smbios", fmt.Sprintf("type=1,uuid=%s", config.UUID),
+		"-smbios", fmt.Sprintf("type=1,uuid=%s", config.Options.UUID),
 		"-device", "virtio-gpu-pci",
 		// "-display", "none",
 		// "-nographic",

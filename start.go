@@ -33,9 +33,9 @@ func (q *Qemu) Start(vmid int) error {
 		return fmt.Errorf("disk not found: %s", config.DiskPath)
 	}
 
-	if _, err := os.Stat(config.BIOSPath); err != nil {
-		return fmt.Errorf("BIOS not found: %s", config.BIOSPath)
-	}
+	// if _, err := os.Stat(config.BIOS); err != nil {
+	// 	return fmt.Errorf("BIOS not found: %s", config.BIOS)
+	// }
 
 	pid, err := q.runVM(config, vmid)
 	if err != nil {
