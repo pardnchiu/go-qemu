@@ -51,18 +51,21 @@ func (q *Qemu) verifyConfig(config Config) (*Config, error) {
 	config.VNCPort = 59000 + config.ID
 
 	if len(config.Network) == 0 {
-		config.Network = []Network{
-			{
-				Bridge:     "vmbr0",
-				Model:      "virtio-net-pci",
-				Vlan:       0,
-				MACAddress: generateMAC(config.ID),
-				Firewall:   false,
-				Disconnect: false,
-				MTU:        1500,
-				RateLimit:  0,
-				Multiqueue: 0,
-			},
+		// config.Network = []Network{
+		// 	{
+		// 		Bridge:     "vmbr0",
+		// 		Model:      "virtio-net-pci",
+		// 		Vlan:       0,
+		// 		MACAddress: generateMAC(config.ID),
+		// 		Firewall:   false,
+		// 		Disconnect: false,
+		// 		MTU:        1500,
+		// 		RateLimit:  0,
+		// 		Multiqueue: 0,
+		// 	},
+		// }
+		config.Network = []string{
+			"bridge=vmbr0,model=virtio-net-pci,vlan=0,mac_address=" + generateMAC(config.ID) + ",firewall=0,disconnect=0,mtu=1500,rate_limit=0,multiqueue=0",
 		}
 	}
 

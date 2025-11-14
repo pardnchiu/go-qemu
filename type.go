@@ -19,7 +19,8 @@ type Config struct {
 	// SSHAuthorizedKey string    `json:"ssh_key"`
 	VNCPort int `json:"vnc_port"`
 	// UUID      string    `json:"uuid"`
-	Network   []Network `json:"network"`
+	// Network   []Network `json:"network"`
+	Network   []string  `json:"network"`
 	CloudInit CloudInit `json:"cloud_init"`
 	Options   Options   `json:"options"`
 }
@@ -46,15 +47,15 @@ type IPConfig struct {
 
 type CloudInit struct {
 	// OS               string         `json:"os"`
-	Hostname        string    `json:"hostname"`
-	Username        string    `json:"username"`
-	Password        string    `json:"passwd"`
-	AuthorizedKey   string    `json:"authorized_key"`
-	UpgradePackages bool      `json:"upgrade_packages"`
-	DNSDomain       string    `json:"dns_domain"`
-	DNSServers      []string  `json:"dns_servers"`
-	IPv4            *IPConfig `json:"ipv4"`
-	IPv6            *IPConfig `json:"ipv6"`
+	Hostname        string   `json:"hostname"`
+	Username        string   `json:"username"`
+	Password        string   `json:"passwd"`
+	AuthorizedKey   string   `json:"authorized_key"`
+	UpgradePackages bool     `json:"upgrade_packages"`
+	DNSDomain       string   `json:"dns_domain"`
+	DNSServers      []string `json:"dns_servers"`
+	IPv4            string   `json:"ipv4"`
+	IPv6            string   `json:"ipv6"`
 	// NetworkConfig   *NetworkConfig `json:"network_config,omitempty"`
 }
 

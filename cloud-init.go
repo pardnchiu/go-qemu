@@ -215,8 +215,11 @@ func (q *Qemu) generateNetworkConfigFile(netConfig *CloudInit) string {
 		return ""
 	}
 
-	hasIPv4 := netConfig.IPv4 != nil && netConfig.IPv4.Mode == "static" && netConfig.IPv4.Address != ""
-	hasIPv6 := netConfig.IPv6 != nil && netConfig.IPv6.Mode == "static" && netConfig.IPv6.Address != ""
+	ipv4 := getIPConfig(netConfig.IPv4)
+	ipv6 := getIPConfig(netConfig.IPv6)
+
+	hasIPv4 := ipv4.Mode == "static" && ipv4.Address != ""
+	hasIPv6 := ipv6.Mode == "static" && ipv6.Address != ""
 
 	if !hasIPv4 && !hasIPv6 {
 		return ""
@@ -225,12 +228,12 @@ func (q *Qemu) generateNetworkConfigFile(netConfig *CloudInit) string {
 	config := "version: 2\nethernets:\n  eth0:\n"
 	addresses := []string{}
 
-	if hasIPv4 && netConfig.IPv4.Address != "" {
-		addresses = append(addresses, netConfig.IPv4.Address)
+	if hasIPv4 && ipv4.Address != "" {
+		addresses = append(addresses, ipv4.Address)
 	}
 
-	if hasIPv6 && netConfig.IPv6.Address != "" {
-		addresses = append(addresses, netConfig.IPv6.Address)
+	if hasIPv6 && ipv6.Address != "" {
+		addresses = append(addresses, ipv6.Address)
 	}
 
 	if len(addresses) > 0 {
@@ -240,30 +243,28 @@ func (q *Qemu) generateNetworkConfigFile(netConfig *CloudInit) string {
 		}
 	}
 
-	if hasIPv4 && netConfig.IPv4.Gateway != "" {
-		config += fmt.Sprintf("    gateway4: %s\n", netConfig.IPv4.Gateway)
+	if hasIPv4 && ipv4.Gateway != "" {
+		config += fmt.Sprintf("    gateway4: %s\n", ipv4.Gateway)
 	}
 
-	if hasIPv6 && netConfig.IPv6 != nil && netConfig.IPv6.Gateway != "" {
-		config += fmt.Sprintf("    gateway6: %s\n", netConfig.IPv6.Gateway)
+	if hasIPv6 && ipv6.Gateway != "" {
+		config += fmt.Sprintf("    gateway6: %s\n", ipv6.Gateway)
 	}
 
 	dhcp4 := "no"
 	dhcp6 := "no"
 
-	if netConfig.IPv4 == nil || netConfig.IPv4.Mode == "dhcp" {
+	if ipv4.Mode == "dhcp" {
 		if !hasIPv4 {
 			dhcp4 = "yes"
 		}
 	}
 
-	if netConfig.IPv6 != nil {
-		if netConfig.IPv6.Mode == "dhcp" {
-			dhcp6 = "yes"
-		} else if netConfig.IPv6.Mode == "slaac" {
-			dhcp6 = "no"
-			config += "    accept-ra: yes\n"
-		}
+	if ipv6.Mode == "dhcp" {
+		dhcp6 = "yes"
+	} else if ipv6.Mode == "slaac" {
+		dhcp6 = "no"
+		config += "    accept-ra: yes\n"
 	}
 
 	config += fmt.Sprintf("    dhcp4: %s\n", dhcp4)
@@ -289,4 +290,28 @@ func (q *Qemu) removeCloudInit(vmid int) {
 	ISO := fmt.Sprintf("%d-cloud-init.iso", vmid)
 	ISOPath := filepath.Join(q.Folder.VM, ISO)
 	os.Remove(ISOPath)
+}
+
+func getIPConfig(value string) IPConfig {
+	config := IPConfig{}
+
+	pairs := strings.Split(value, ",")
+	for _, pair := range pairs {
+		kv := strings.SplitN(pair, "=", 2)
+		if len(kv) != 2 {
+			continue
+		}
+
+		key, val := kv[0], kv[1]
+		switch key {
+		case "mode":
+			config.Mode = val
+		case "address":
+			config.Address = val
+		case "gateway":
+			config.Gateway = val
+		}
+	}
+
+	return config
 }

@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
+	"strings"
 
 	"github.com/google/uuid"
 )
@@ -79,12 +81,8 @@ func (q *Qemu) Create(config Config, ssh string) error {
 			Password:        passwd,
 			AuthorizedKey:   ssh,
 			UpgradePackages: true,
-			IPv4: &IPConfig{
-				Mode: "dhcp",
-			},
-			IPv6: &IPConfig{
-				Mode: "dhcp",
-			},
+			IPv4:            "mode=dhcp,address=,gateway=",
+			IPv6:            "mode=dhcp,address=,gateway=",
 		}
 	}
 
@@ -170,7 +168,9 @@ func (q *Qemu) verifyArgs(config Config) []string {
 		// "-serial", "null", // Disable serial console
 	}
 
-	for i, net := range config.Network {
+	for i, e := range config.Network {
+		net := getNetwork(e)
+		slog.Info("Parsed network", "value", e, "network", net)
 		if net.Disconnect {
 			continue
 		}
@@ -223,4 +223,42 @@ func (q *Qemu) assignVMID() (int, error) {
 	}
 
 	return 0, fmt.Errorf("no available VMID can be assigned")
+}
+
+func getNetwork(value string) Network {
+	network := Network{MTU: 1500}
+
+	pairs := strings.Split(value, ",")
+	for _, pair := range pairs {
+		kv := strings.SplitN(pair, "=", 2)
+		if len(kv) != 2 {
+			continue
+		}
+
+		key, val := kv[0], kv[1]
+		switch key {
+		case "bridge":
+			network.Bridge = val
+		case "model":
+			network.Model = val
+		case "vlan":
+			network.Vlan, _ = strconv.Atoi(val)
+		case "mac_address":
+			network.MACAddress = val
+		case "firewall":
+			network.Firewall = val != "0"
+		case "disconnect":
+			network.Disconnect = val != "0"
+		case "mtu":
+			if mtu, err := strconv.Atoi(val); err == nil && mtu > 0 {
+				network.MTU = mtu
+			}
+		case "rate_limit":
+			network.RateLimit, _ = strconv.Atoi(val)
+		case "multiqueue":
+			network.Multiqueue, _ = strconv.Atoi(val)
+		}
+	}
+
+	return network
 }
